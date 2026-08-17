@@ -1,0 +1,9 @@
+{
+  "view.sessions": "Sesiones",
+  "welcome.empty": "SessionKeeper aún no vigila nada.\n[Ver dónde busca](command:sessionkeeper.showStorage)",
+  "cmd.refresh": "Actualizar",
+  "cmd.showStorage": "Ver dónde busca y dónde copia",
+  "cmd.showLog": "Ver el registro",
+  "cfg.vaultPath": "Carpeta donde se guardan las copias. Vacío = la carpeta por defecto de tu sistema. Elige una que ya respaldes (disco externo, NAS); si eliges una carpeta sincronizada con la nube, ten en cuenta que las transcripciones pueden contener credenciales.",
+  "cfg.claudeHome": "Carpeta de configuración de Claude Code (por defecto `CLAUDE_CONFIG_DIR`, o `~/.claude`)."
+}

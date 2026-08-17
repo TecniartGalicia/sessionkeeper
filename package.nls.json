@@ -1,0 +1,9 @@
+{
+  "view.sessions": "Sessions",
+  "welcome.empty": "SessionKeeper is not watching anything yet.\n[Show storage locations](command:sessionkeeper.showStorage)",
+  "cmd.refresh": "Refresh",
+  "cmd.showStorage": "Show storage locations",
+  "cmd.showLog": "Show log",
+  "cfg.vaultPath": "Folder where backups are stored. Leave empty to use the default location for your system. Pick a folder you already back up (external drive, NAS); if you pick a cloud-synced folder, remember transcripts can contain credentials.",
+  "cfg.claudeHome": "Override the Claude Code configuration folder (defaults to `CLAUDE_CONFIG_DIR`, or `~/.claude`)."
+}

@@ -1,0 +1,15 @@
+node_modules/
+out/
+dist/
+.vscode-test/
+*.vsix
+coverage/
+
+# Documentos internos: no van al repo público
+docs/PLAN.md
+docs/TUS-TAREAS.md
+docs/LANZAMIENTO.md
+
+# Nunca
+*secrets*.txt
+.env

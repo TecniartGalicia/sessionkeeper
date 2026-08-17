@@ -1,0 +1,164 @@
+{
+  "name": "sessionkeeper",
+  "displayName": "SessionKeeper",
+  "description": "Back up and rescue your AI coding sessions, locally. Keeps a versioned copy of every session — transcript, subagents and tool outputs — so nothing is gone when retention, an update or a crash wipes it. Works with Claude Code. Local-first, no telemetry. Not affiliated with Anthropic or OpenAI.",
+  "version": "0.0.1",
+  "publisher": "argalla",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "claude code",
+    "codex",
+    "ai agent",
+    "session history",
+    "backup",
+    "restore",
+    "transcript",
+    "recovery",
+    "archive",
+    "jsonl"
+  ],
+  "pricing": "Trial",
+  "preview": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TecniartGalicia/sessionkeeper.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TecniartGalicia/sessionkeeper/issues"
+  },
+  "homepage": "https://github.com/TecniartGalicia/sessionkeeper#readme",
+  "qna": "https://github.com/TecniartGalicia/sessionkeeper/discussions",
+  "galleryBanner": {
+    "color": "#0F172A",
+    "theme": "dark"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": {
+      "supported": true
+    }
+  },
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.mjs --production",
+    "watch": "node esbuild.mjs --watch",
+    "compile-tests": "tsc -p tsconfig.test.json",
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run compile-tests && mocha \"out/test/unit/**/*.test.js\"",
+    "test:integration": "npm run build && npm run compile-tests && node ./out/test/integration/runTest.js",
+    "l10n": "node scripts/l10n-sync.mjs",
+    "package": "vsce package --no-dependencies",
+    "check": "npm run typecheck && npm run lint && npm test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.17.0",
+    "@types/vscode": "1.95.0",
+    "@typescript-eslint/eslint-plugin": "^8.30.0",
+    "@typescript-eslint/parser": "^8.30.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.3.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.8.1",
+    "glob": "^13.0.6",
+    "mocha": "^11.1.0",
+    "ovsx": "^1.1.1",
+    "typescript": "^5.8.0"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sessionkeeper",
+          "title": "SessionKeeper",
+          "icon": "media/view-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "sessionkeeper": [
+        {
+          "id": "sessionkeeper.sessions",
+          "name": "%view.sessions%",
+          "icon": "media/view-icon.svg",
+          "contextualTitle": "SessionKeeper"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "sessionkeeper.sessions",
+        "contents": "%welcome.empty%"
+      }
+    ],
+    "commands": [
+      {
+        "command": "sessionkeeper.refresh",
+        "title": "%cmd.refresh%",
+        "category": "SessionKeeper",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "sessionkeeper.showStorage",
+        "title": "%cmd.showStorage%",
+        "category": "SessionKeeper"
+      },
+      {
+        "command": "sessionkeeper.showLog",
+        "title": "%cmd.showLog%",
+        "category": "SessionKeeper"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "sessionkeeper.refresh",
+          "when": "view == sessionkeeper.sessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sessionkeeper.showStorage",
+          "when": "view == sessionkeeper.sessions",
+          "group": "1_info@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "SessionKeeper",
+      "properties": {
+        "sessionkeeper.vaultPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "%cfg.vaultPath%"
+        },
+        "sessionkeeper.claudeHome": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "%cfg.claudeHome%"
+        }
+      }
+    }
+  },
+  "allowScripts": {
+    "@vscode/vsce-sign@2.0.9": true,
+    "esbuild@0.28.2": true
+  }
+}
