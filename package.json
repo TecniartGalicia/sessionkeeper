@@ -2,9 +2,10 @@
   "name": "sessionkeeper",
   "displayName": "SessionKeeper",
   "description": "Back up and rescue your AI coding sessions, locally. Keeps a versioned copy of every session — transcript, subagents and tool outputs — so nothing is gone when retention, an update or a crash wipes it. Works with Claude Code. Local-first, no telemetry. Not affiliated with Anthropic or OpenAI.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "argalla",
   "license": "MIT",
+  "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -24,7 +25,6 @@
     "archive",
     "jsonl"
   ],
-  "pricing": "Trial",
   "preview": true,
   "repository": {
     "type": "git",

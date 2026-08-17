@@ -1,6 +1,7 @@
 // Generates media/icon.png (256×256), media/icon.svg and media/view-icon.svg without any dependency.
-// Design: Argalla navy tile, a turquoise shield outline and a blue check mark inside — "your changes,
-// kept safe and reviewed". Rendered with signed-distance functions at 4× and box-downsampled.
+// Design: Argalla navy tile, a blue arrow dropping into a turquoise tray — "keep a copy" — with the
+// session bar on top. Rendered with signed-distance functions at 4× and box-downsampled.
+// Same pipeline as ChangeKeeper's icon, deliberately a different mark.
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -21,17 +22,20 @@ const BLUE = [0x3b, 0x82, 0xf6];
 
 const RADIUS = 28;
 const STROKE = 11;
-// shield: polygon (in 128-unit space), closed
-const SHIELD = [
-  [64, 22],
-  [96, 34],
-  [96, 62],
-  [64, 106],
-  [32, 62],
-  [32, 34],
+
+// Arrow going down into a tray: "keep a copy". Two short bars above the arrow stand for the
+// versions already kept. Deliberately different from ChangeKeeper's shield.
+const ARROW_STEM = [[64, 30], [64, 72]];
+const ARROW_HEAD = [[46, 56], [64, 74], [82, 56]];
+const TRAY = [
+  [30, 76],
+  [30, 100],
+  [98, 100],
+  [98, 76],
 ];
-// check mark inside the shield
-const CHECK = { a: [48, 64], b: [59, 76], c: [80, 50] };
+const BARS = [
+  { x: 44, y: 16, w: 40, h: 9 },
+];
 
 const sdRoundRect = (x, y, w, h, r) => {
   const qx = Math.abs(x - w / 2) - (w / 2 - r);
@@ -43,9 +47,9 @@ const sdSegment = (px, py, [ax, ay], [bx, by]) => {
   const t = Math.max(0, Math.min(1, (wx * vx + wy * vy) / (vx * vx + vy * vy)));
   return Math.hypot(wx - t * vx, wy - t * vy);
 };
-const sdPolyline = (x, y, pts, closed) => {
+const sdPolyline = (x, y, pts) => {
   let d = Infinity;
-  for (let i = 0; i < pts.length - (closed ? 0 : 1); i++) d = Math.min(d, sdSegment(x, y, pts[i], pts[(i + 1) % pts.length]));
+  for (let i = 0; i < pts.length - 1; i++) d = Math.min(d, sdSegment(x, y, pts[i], pts[i + 1]));
   return d;
 };
 
@@ -57,9 +61,12 @@ for (let j = 0; j < W; j++) {
     let r = 0, g = 0, b = 0, a = 0;
     if (sdRoundRect(x, y, UNIT, UNIT, RADIUS) <= 0) {
       [r, g, b] = NAVY; a = 255;
-      if (sdPolyline(x, y, SHIELD, true) <= STROKE / 2) [r, g, b] = TURQ;
-      const dCheck = Math.min(sdSegment(x, y, CHECK.a, CHECK.b), sdSegment(x, y, CHECK.b, CHECK.c));
-      if (dCheck <= STROKE / 2) [r, g, b] = BLUE;
+      if (sdPolyline(x, y, TRAY) <= STROKE / 2) [r, g, b] = TURQ;
+      for (const bar of BARS) {
+        if (sdRoundRect(x - bar.x, y - bar.y, bar.w, bar.h, bar.h / 2) <= 0) [r, g, b] = TURQ;
+      }
+      const dArrow = Math.min(sdPolyline(x, y, ARROW_STEM), sdPolyline(x, y, ARROW_HEAD));
+      if (dArrow <= STROKE / 2) [r, g, b] = BLUE;
     }
     const o = (j * W + i) * 4;
     rgba[o] = r; rgba[o + 1] = g; rgba[o + 2] = b; rgba[o + 3] = a;
@@ -99,18 +106,27 @@ fs.mkdirSync(path.dirname(OUT_PNG), { recursive: true });
 fs.writeFileSync(OUT_PNG, png);
 
 const hex = ([r, g, b]) => '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
-const shieldPts = SHIELD.map((p) => p.join(',')).join(' ');
+const round = (n) => Math.round(n * 10) / 10;
+const pts = (a) => a.map((p) => `${round(p[0])},${round(p[1])}`).join(' ');
+const trayPts = pts(TRAY);
+const stemPts = pts(ARROW_STEM);
+const headPts = pts(ARROW_HEAD);
+const barsSvg = BARS.map((b) => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="${b.h / 2}" fill="${hex(TURQ)}"/>`).join('\n  ');
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${UNIT} ${UNIT}" width="${SIZE}" height="${SIZE}">
   <rect width="${UNIT}" height="${UNIT}" rx="${RADIUS}" fill="${hex(NAVY)}"/>
-  <polygon points="${shieldPts}" fill="none" stroke="${hex(TURQ)}" stroke-width="${STROKE}" stroke-linejoin="round"/>
-  <polyline points="${CHECK.a.join(',')} ${CHECK.b.join(',')} ${CHECK.c.join(',')}" fill="none" stroke="${hex(BLUE)}" stroke-width="${STROKE}" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="${trayPts}" fill="none" stroke="${hex(TURQ)}" stroke-width="${STROKE}" stroke-linecap="round" stroke-linejoin="round"/>
+  ${barsSvg}
+  <polyline points="${stemPts}" fill="none" stroke="${hex(BLUE)}" stroke-width="${STROKE}" stroke-linecap="round"/>
+  <polyline points="${headPts}" fill="none" stroke="${hex(BLUE)}" stroke-width="${STROKE}" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
 `;
 fs.writeFileSync(OUT_SVG, svg);
-// Activity-bar icon: single colour (currentColor), no tile, thicker strokes for 24px rendering.
+const barsView = BARS.map((b) => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="${b.h / 2}" fill="currentColor" stroke="none"/>`).join('\n  ');
 const view = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="24" height="24" fill="none" stroke="currentColor" stroke-width="12" stroke-linejoin="round" stroke-linecap="round">
-  <polygon points="${shieldPts}"/>
-  <polyline points="${CHECK.a.join(',')} ${CHECK.b.join(',')} ${CHECK.c.join(',')}"/>
+  <polyline points="${trayPts}"/>
+  ${barsView}
+  <polyline points="${stemPts}"/>
+  <polyline points="${headPts}"/>
 </svg>
 `;
 fs.writeFileSync(OUT_VIEW, view);

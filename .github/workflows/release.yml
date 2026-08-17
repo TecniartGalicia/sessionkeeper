@@ -43,30 +43,30 @@ jobs:
           fi
       - run: npm run check
       - run: node scripts/l10n-sync.mjs
-      - run: npx vsce package --no-dependencies -o "changekeeper-${GITHUB_REF_NAME}.vsix"
+      - run: npx vsce package --no-dependencies -o "sessionkeeper-${GITHUB_REF_NAME}.vsix"
       - name: Publish to Visual Studio Marketplace (skips if this version is already there)
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |
           VER="${GITHUB_REF_NAME#v}"
           # `vsce show` prints "undefined" (not JSON) when the extension is not published yet: treat anything unparsable as "not there".
-          if npx vsce show argalla.changekeeper --json 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{let j={};try{j=JSON.parse(d)||{}}catch{}process.exit((j.versions||[]).some(v=>v.version==='$VER')?0:1)})"; then
+          if npx vsce show argalla.sessionkeeper --json 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{let j={};try{j=JSON.parse(d)||{}}catch{}process.exit((j.versions||[]).some(v=>v.version==='$VER')?0:1)})"; then
             echo "Marketplace already has $VER — skipping"
           else
-            npx vsce publish --no-dependencies --packagePath "changekeeper-${GITHUB_REF_NAME}.vsix"
+            npx vsce publish --no-dependencies --packagePath "sessionkeeper-${GITHUB_REF_NAME}.vsix"
           fi
       - name: Publish to Open VSX (skips if this version is already there)
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
         run: |
           VER="${GITHUB_REF_NAME#v}"
-          if npx ovsx get argalla.changekeeper -v "$VER" --metadata >/dev/null 2>&1; then
+          if npx ovsx get argalla.sessionkeeper -v "$VER" --metadata >/dev/null 2>&1; then
             echo "Open VSX already has $VER — skipping"
           else
-            npx ovsx publish "changekeeper-${GITHUB_REF_NAME}.vsix" -p "$OVSX_PAT"
+            npx ovsx publish "sessionkeeper-${GITHUB_REF_NAME}.vsix" -p "$OVSX_PAT"
           fi
       - name: GitHub release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
-          files: changekeeper-${{ github.ref_name }}.vsix
+          files: sessionkeeper-${{ github.ref_name }}.vsix
           generate_release_notes: true
