@@ -117,3 +117,22 @@ Agente independiente sobre `src/` completo, con verificación ejecutando código
 - **A-16**: un trozo por ciclo produce muchos trozos pequeños (medido: 188 trozos = 1,3× el tamaño del origen). Solo se dispara con vigilancia continua, que llega con el Pro: se acumulará por umbral antes de cerrar trozo.
 - **A-17**: `probeFile` era código muerto y contradecía a `probesOfSource`; eliminado al introducir las sondas.
 - **A-19**: `safeCutOffset` puede recorrer muchas líneas hacia atrás en el peor caso; se acotará junto con A-16.
+
+---
+
+## §2 — Prueba real de compra y licencia (0.2.0), 2026-08-17
+
+Hecha contra producción, no contra el sandbox: la guía lo exige antes de anunciar un Pro, porque las claves del sandbox de Polar no valen contra `api.polar.sh`.
+
+| Paso | Resultado real |
+|---|---|
+| Compra con el cupón `SKTEST2026` (−100 %, un solo uso) desde el enlace de pago de la extensión | Pedido `ARGALLA-VOKFTBPLGC-0003` **Paid**, 0,00 €; clave `SKP-…9F4216` emitida con estado **Granted**. El checkout mostraba 12 € con el IVA desglosado (9,92 + 2,08) antes de aplicar el cupón |
+| Correo que ya era cliente | Polar redirige al **customer portal** en vez de mostrar la clave (mismo comportamiento que en ChangeKeeper): la clave se saca del panel, Benefits → License Keys |
+| `activate` con el código compilado de la extensión | `{ok:true, status:"granted", activationId:…}` |
+| `validate` con la activación | `{ok:true, status:"granted"}` → el motor decide **`pro:true, source:"validated"`** |
+| `deactivate` | `true` (204 sin cuerpo) |
+| `validate` con la activación ya retirada | `404 "Not found"`, `activationGone:true` → el motor decide **`pro:false, reason:"activation-removed"`** |
+| Clave **revocada** en Polar → `validate` | `404 "License key is no longer active."`, marcado **definitivo** → Pro se apaga en la siguiente comprobación |
+| Contador del panel | **Validations: 2** — confirma que Polar cuenta `validate` y no `activate` |
+
+Estado final: clave de prueba **revocada**, cupón agotado (1/1) y por tanto inservible. El descuento de lanzamiento `LANZAMIENTO` (−5 €) queda activo; además de retirarlo en Polar el 2026-09-14, **la extensión deja de anunciarlo por fecha** (`priceLabel()` en `polarConfig.ts`, con test), para que la promesa no dependa de que alguien se acuerde.
