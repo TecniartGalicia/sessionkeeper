@@ -63,9 +63,21 @@ for (const provider of dirs(vault)) {
           continue;
         }
 
+        // Orden por posición y no por el del array: si `gen.json` llegara con los trozos
+        // desordenados, concatenarlos tal cual daría un fichero del tamaño correcto, con todas
+        // las líneas válidas y el contenido mezclado — el peor fallo posible en la herramienta
+        // que existe justo para el día en que todo lo demás falla.
+        const chunks = [...state.chunks].sort((a, b) => a.from - b.from);
         const blocks = [];
         let broken = false;
-        for (const chunk of state.chunks) {
+        let offset = 0;
+        for (const chunk of chunks) {
+          if (chunk.from !== offset) {
+            console.error('HUECO O SOLAPE en ' + genDir + ': el trozo ' + chunk.n + ' empieza en ' + chunk.from + ' y se esperaba ' + offset);
+            broken = true;
+            break;
+          }
+          offset = chunk.to;
           const file = path.join(genDir, 'chunks', String(chunk.n).padStart(6, '0') + '.gz');
           try {
             const raw = zlib.gunzipSync(fs.readFileSync(long(file)));
@@ -80,6 +92,10 @@ for (const provider of dirs(vault)) {
             broken = true;
             break;
           }
+        }
+        if (!broken && offset !== state.copiedBytes) {
+          console.error('COPIA INCOMPLETA en ' + genDir + ': ' + offset + ' de ' + state.copiedBytes + ' bytes');
+          broken = true;
         }
         if (broken) {
           bad++;

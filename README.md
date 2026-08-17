@@ -21,7 +21,7 @@ Those transcripts are not chat logs. They are the decisions, the commands, the f
 ## What it does
 
 - **Backs up the whole session, not just the file.** A Claude Code session is `<id>.jsonl` *plus* a sibling folder with `subagents/` and `tool-results/`. Copy only the transcript and you keep something that looks complete and isn't. SessionKeeper copies all of it, and your `memory/` folder too.
-- **Incrementally.** Transcripts only ever grow, so after the first copy each cycle stores just the new bytes — kilobytes, in milliseconds. If a file is rewritten or truncated instead of appended to, SessionKeeper notices (it checks both ends of what it already copied) and starts a new version rather than corrupting the old one.
+- **Incrementally.** Transcripts only ever grow, so after the first copy each cycle stores just the new bytes — typically kilobytes, and a fraction of a second. If a file is rewritten or truncated instead of appended to, SessionKeeper notices (it re-checks the start, the end and probes spread through what it already copied) and starts a new version rather than corrupting the old one.
 - **Restores carefully.** It never writes over an existing file without first saving a byte-for-byte copy, it refuses to touch a session that is running right now, and it warns you that a duplicate copy in the wrong folder makes `claude --resume` report *not found*.
 - **Tells you what's at risk.** The Doctor lists what would fall outside your retention window, which sessions now exist only in the vault, how much space everything takes, and whether your transcripts contain credentials.
 - **Exports to Markdown**, with credentials redacted.
@@ -36,7 +36,7 @@ It does not promise that a restored session will resume. Restoring gives you the
 
 Everything above is free, for good. **Pro adds two things**, for a **one-time 12 €** (7 € with the code `LANZAMIENTO` until 14 September 2026):
 
-- **Continuous watching** — sessions get backed up as they change, without pressing anything.
+- **Continuous watching** — sessions get backed up while you work, without pressing anything: every change is copied within **60 seconds at the latest** (sooner, 5 s, once the session goes quiet).
 - **Codex as a second source** — `~/.codex/sessions` alongside Claude Code.
 
 `SessionKeeper Pro: get a licence` opens the checkout ([Polar](https://polar.sh) is the merchant of record: it invoices you and handles VAT). One key activates **three** computers, and you can free a slot from your Polar customer portal.

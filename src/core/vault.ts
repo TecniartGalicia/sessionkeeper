@@ -200,6 +200,21 @@ export function generationDir(base: string, generation: number): string {
   return path.join(base, `gen-${String(generation).padStart(3, '0')}`);
 }
 
+/** Formato máximo del almacén que esta versión entiende. */
+export const MAX_SUPPORTED_FORMAT = VAULT_FORMAT;
+
+/**
+ * Un almacén escrito por una versión más nueva no se puede leer a medias: mejor decirlo que
+ * devolver datos incompletos.
+ */
+export function assertReadableFormat(manifest: VaultManifest | undefined): void {
+  if (manifest && manifest.formatVersion > MAX_SUPPORTED_FORMAT) {
+    throw new Error(
+      `este almacén usa el formato ${manifest.formatVersion} y esta versión de SessionKeeper entiende hasta el ${MAX_SUPPORTED_FORMAT}: actualiza la extensión`,
+    );
+  }
+}
+
 export function statePath(base: string, generation: number): string {
   return path.join(generationDir(base, generation), 'gen.json');
 }
@@ -216,9 +231,12 @@ export function generationsOf(base: string): number[] {
   } catch {
     return [];
   }
+  // El filtro de tres dígitos hacía invisible la generación 1000 en adelante: `latestGeneration`
+  // habría devuelto una anterior y se habría copiado encima de ella.
   return entries
-    .filter((e) => /^gen-\d{3}$/.test(e))
+    .filter((e) => /^gen-\d+$/.test(e))
     .map((e) => Number(e.slice(4)))
+    .filter((n) => Number.isInteger(n))
     .sort((a, b) => a - b);
 }
 

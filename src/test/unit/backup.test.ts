@@ -312,3 +312,40 @@ describe('core/lock', () => {
     assert.ok(true);
   });
 });
+
+describe('core/hash — cotas de safeCutOffset', () => {
+  it('no recorre más allá de la cota, y una línea gigante no atasca la parte', function () {
+    this.timeout(20000);
+    // 3 MB de líneas que no parsean: sin cota, esto era un recorrido línea a línea de 320 ms.
+    const basura = Buffer.from('{"roto":\n'.repeat(300000));
+    const t0 = Date.now();
+    assert.strictEqual(safeCutOffset(basura), 0);
+    assert.ok(Date.now() - t0 < 500, `tardó ${Date.now() - t0} ms`);
+
+    // Y una línea válida al final sí se encuentra.
+    const conFinal = Buffer.concat([basura, Buffer.from('{"ok":1}\n')]);
+    assert.strictEqual(safeCutOffset(conFinal), conFinal.length);
+  });
+
+  it('una línea más larga que el bloque acaba copiándose en crudo, no en un bucle', () => {
+    const box = makeSandbox('linea-gigante');
+    try {
+      writeSession(box, SLUG, SESSION, { messages: 1 });
+      const transcript = path.join(box.claudeHome, 'projects', SLUG, `${SESSION}.jsonl`);
+      // Una sola línea de 3 MB sin salto al final: el motor no puede cortar en frontera.
+      fs.writeFileSync(transcript, '{"tool_result":"' + 'z'.repeat(3 * 1024 * 1024) + '"');
+      const session = discoverClaude(box.env, box.claudeHome).sessions[0];
+      const r1 = backupSession(box.vault, session);
+      assert.strictEqual(r1.parts[0].action, 'wait', 'sin frontera, espera');
+
+      // Cuando la línea se cierra, se copia entera.
+      fs.appendFileSync(transcript, '}\n');
+      const again = discoverClaude(box.env, box.claudeHome).sessions[0];
+      const r2 = backupSession(box.vault, again);
+      assert.ok(r2.bytesCopied > 3 * 1024 * 1024, `copió ${r2.bytesCopied}`);
+      assert.deepStrictEqual(rebuildPart(box.vault, again, 'main.jsonl'), fs.readFileSync(transcript));
+    } finally {
+      box.dispose();
+    }
+  });
+});

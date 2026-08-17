@@ -22,6 +22,32 @@ export interface SessionStatus {
   readonly generations: number;
 }
 
+/**
+ * Caché del estado de cada parte, invalidada por el `mtime` del propio `gen.json`.
+ *
+ * Refrescar el árbol o dar una vuelta el vigilante leía y parseaba un `gen.json` por parte: con
+ * 60 sesiones son 180 lecturas para no enterarse de nada. Ahora es un `stat` por parte, y solo
+ * se lee de verdad lo que ha cambiado.
+ */
+const stateCache = new Map<string, { mtimeMs: number; size: number; state: PartState | undefined }>();
+
+function readStateCached(file: string): PartState | undefined {
+  let st: fs.Stats;
+  try {
+    st = fs.statSync(file);
+  } catch {
+    stateCache.delete(file);
+    return undefined;
+  }
+  const hit = stateCache.get(file);
+  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) {
+    return hit.state;
+  }
+  const state = readJson<PartState>(file);
+  stateCache.set(file, { mtimeMs: st.mtimeMs, size: st.size, state });
+  return state;
+}
+
 function statSize(file: string): number | undefined {
   try {
     return fs.statSync(file).size;
@@ -44,7 +70,7 @@ export function sessionStatus(vaultRoot: string, session: DiscoveredSession): Se
     const gen = latestGeneration(base);
     if (gen > 0) {
       generations = Math.max(generations, gen);
-      const state = readJson<PartState>(path.join(base, `gen-${String(gen).padStart(3, '0')}`, 'gen.json'));
+      const state = readStateCached(path.join(base, `gen-${String(gen).padStart(3, '0')}`, 'gen.json'));
       if (state) {
         anyState = true;
         copied += state.copiedBytes;

@@ -11,7 +11,7 @@ import { restoreSession, isSessionLive, writeRestoreDocs, type RestoreOptions, t
 import { scanText, type SecretHit } from '../core/secrets';
 import { sessionStatus, vaultSize, type SessionStatus } from '../core/status';
 import { discoverVault } from '../core/vaultIndex';
-import { DIR_MODE, ensureManifest, hostId, sweepTempFiles, writeAtomic } from '../core/vault';
+import { assertReadableFormat, DIR_MODE, ensureManifest, hostId, sweepTempFiles, writeAtomic } from '../core/vault';
 
 /** Localiza un fichero de `assets/` tanto en el bundle (`dist/`) como en los tests (`out/`). */
 function findAsset(name: string): string | undefined {
@@ -54,6 +54,17 @@ export interface BackupOutcome {
  * Orquesta el trabajo real. No conoce `vscode`: recibe un `Env` y devuelve datos, para que
  * la capa de UI solo tenga que pintar y pedir confirmaciones.
  */
+/**
+ * Caché de tamaño del almacén, compartida entre instancias de `Keeper`.
+ *
+ * Medir el almacén paseándolo entero costaba 250 ms con 20 sesiones y se proyectaba a más de
+ * 20 s con un almacén grande — en cada ciclo de la vigilancia, dos veces (también se barrían
+ * los temporales). Ahora el paseo completo se hace una vez y luego se va sumando lo copiado.
+ */
+const vaultSizeCache = new Map<string, { bytes: number; at: number }>();
+/** Almacenes ya preparados en esta sesión (temporales barridos, documentos escritos). */
+const prepared = new Set<string>();
+
 export class Keeper {
   constructor(private readonly config: KeeperConfig) {}
 
@@ -104,17 +115,24 @@ export class Keeper {
     const root = this.vaultRoot;
     fs.mkdirSync(root, { recursive: true, mode: DIR_MODE });
     const manifest = ensureManifest(root, hostId(os.hostname()));
-    sweepTempFiles(root);
-    writeRestoreDocs(root);
-    this.writeRestoreScript(root);
+    assertReadableFormat(manifest);
 
+    // Preparación del almacén: una vez por sesión de VS Code, no en cada ciclo. Barrer
+    // temporales y reescribir los documentos de recuperación con fsync en cada copia era la
+    // mitad del coste del ciclo de la vigilancia.
+    if (!prepared.has(root)) {
+      prepared.add(root);
+      sweepTempFiles(root);
+      writeRestoreDocs(root);
+      this.writeRestoreScript(root);
+    }
     // Dos ventanas de VS Code copiando al mismo almacén se pisarían el estado.
     const lock = acquireLock(root, os.hostname());
 
     let bytes = 0;
     let waiting = 0;
     let budgetReached = false;
-    let used = vaultSize(root);
+    let used = this.vaultBytes();
     const errors: string[] = [];
     const rotated: string[] = [];
     const secrets = new Map<string, SecretHit>();
@@ -133,7 +151,7 @@ export class Keeper {
         }
         let result;
         try {
-          result = backupSession(root, session);
+          result = backupSession(root, session, { onProgress: () => lock.heartbeat() });
         } catch (err) {
           errors.push(`${session.sessionId}: ${err instanceof Error ? err.message : String(err)}`);
           done++;
@@ -152,6 +170,7 @@ export class Keeper {
           }
         }
         used += result.bytesCopied;
+        this.rememberVaultSize(used);
         for (const hit of this.scanCopied(session, result)) {
           const prev = secrets.get(hit.id);
           secrets.set(hit.id, { ...hit, count: (prev?.count ?? 0) + hit.count });
@@ -247,8 +266,24 @@ export class Keeper {
     });
   }
 
-  vaultBytes(): number {
-    return vaultSize(this.vaultRoot);
+  /**
+   * Tamaño del almacén. Se calcula entero la primera vez (y como muy tarde cada hora) y el
+   * resto del tiempo se mantiene sumando lo que se copia.
+   */
+  vaultBytes(force = false): number {
+    const root = this.vaultRoot;
+    const cached = vaultSizeCache.get(root);
+    if (!force && cached && Date.now() - cached.at < 60 * 60 * 1000) {
+      return cached.bytes;
+    }
+    const bytes = vaultSize(root);
+    vaultSizeCache.set(root, { bytes, at: Date.now() });
+    return bytes;
+  }
+
+  private rememberVaultSize(bytes: number): void {
+    const cached = vaultSizeCache.get(this.vaultRoot);
+    vaultSizeCache.set(this.vaultRoot, { bytes, at: cached?.at ?? Date.now() });
   }
 
   /**

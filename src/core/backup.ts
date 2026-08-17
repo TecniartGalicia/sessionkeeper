@@ -97,6 +97,7 @@ export function backupPart(
   vaultRoot: string,
   session: DiscoveredSession,
   part: SessionPart,
+  hooks: BackupHooks = {},
 ): PartResult {
   const base = partDir(vaultRoot, session, part.rel);
   let generation = latestGeneration(base);
@@ -172,6 +173,9 @@ export function backupPart(
 
     copied += usable;
     from = to;
+    // Una sola parte de 324 MB puede tardar más que el plazo del lock: si el latido solo se
+    // diera entre sesiones, otra ventana la daría por abandonada y escribiría encima.
+    hooks.onProgress?.();
   }
 
   if (copied === 0) {
@@ -207,7 +211,16 @@ function mergeParts(
   return [...byRel.values()];
 }
 
-export function backupSession(vaultRoot: string, session: DiscoveredSession): SessionResult {
+export interface BackupHooks {
+  /** Se llama tras cada bloque copiado: sirve para latir el lock en ficheros muy grandes. */
+  readonly onProgress?: () => void;
+}
+
+export function backupSession(
+  vaultRoot: string,
+  session: DiscoveredSession,
+  hooks: BackupHooks = {},
+): SessionResult {
   const dir = sessionDir(vaultRoot, session);
   const metaFile = path.join(dir, 'meta.json');
   let previous: SessionMeta | undefined;
@@ -222,7 +235,7 @@ export function backupSession(vaultRoot: string, session: DiscoveredSession): Se
   // tumbar la copia del resto: se anota como 'error' y se sigue.
   const parts = session.parts.map((p) => {
     try {
-      return backupPart(vaultRoot, session, p);
+      return backupPart(vaultRoot, session, p, hooks);
     } catch (err) {
       return {
         rel: p.rel,

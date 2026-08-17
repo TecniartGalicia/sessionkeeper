@@ -42,17 +42,39 @@ function alive(pid: number): boolean {
 
 export function acquireLock(vaultRoot: string, host: string, now = Date.now()): VaultLock {
   const file = path.join(vaultRoot, '.lock');
-  const current = readJson<LockData>(file);
+  const data: LockData = { pid: process.pid, host, takenAt: new Date(now).toISOString(), heartbeatMs: now };
+  const body = JSON.stringify(data, null, 2);
 
+  // Creación exclusiva: leer y luego escribir dejaba una ventana en la que dos procesos que
+  // arrancan a la vez se llevaban los dos el lock.
+  try {
+    const fd = fs.openSync(file, 'wx');
+    try {
+      fs.writeFileSync(fd, body);
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    return makeLock(file, data);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+      throw err;
+    }
+  }
+
+  // Ya había uno: solo se releva si su dueño está muerto o su latido lleva parado demasiado.
+  const current = readJson<LockData>(file);
   if (current && current.pid !== process.pid) {
     const fresh = now - current.heartbeatMs < STALE_MS;
     if (fresh && alive(current.pid)) {
       throw new LockedError(current);
     }
   }
+  writeAtomic(file, body);
+  return makeLock(file, data);
+}
 
-  const data: LockData = { pid: process.pid, host, takenAt: new Date(now).toISOString(), heartbeatMs: now };
-  writeAtomic(file, JSON.stringify(data, null, 2));
+function makeLock(file: string, data: LockData): VaultLock {
 
   return {
     heartbeat(): void {

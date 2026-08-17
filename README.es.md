@@ -21,7 +21,7 @@ Esas transcripciones no son un chat: son las decisiones, los comandos, los inten
 ## Qué hace
 
 - **Copia la sesión entera, no solo el fichero.** Una sesión de Claude Code es `<id>.jsonl` **más** una carpeta hermana con `subagents/` y `tool-results/`. Si copias solo la transcripción te queda algo que parece completo y no lo está. SessionKeeper copia todo, y también tu carpeta `memory/`.
-- **De forma incremental.** Las transcripciones solo crecen, así que después de la primera copia cada ciclo guarda únicamente los bytes nuevos: kilobytes, en milisegundos. Si un fichero se reescribe o se trunca en lugar de crecer, SessionKeeper lo detecta (comprueba las dos puntas de lo ya copiado) y abre una versión nueva en vez de estropear la anterior.
+- **De forma incremental.** Las transcripciones solo crecen, así que después de la primera copia cada ciclo guarda únicamente los bytes nuevos: normalmente kilobytes, en una fracción de segundo. Si un fichero se reescribe o se trunca en lugar de crecer, SessionKeeper lo detecta (vuelve a comprobar el principio, el final y sondas repartidas por lo ya copiado) y abre una versión nueva en vez de estropear la anterior.
 - **Restaura con cuidado.** Nunca escribe sobre un fichero existente sin guardar antes una copia byte a byte, se niega a tocar una sesión que está en marcha, y te avisa de que un duplicado en la carpeta equivocada hace que `claude --resume` responda que no la encuentra.
 - **Te dice qué está en riesgo.** El diagnóstico lista lo que caería fuera de tu ventana de retención, qué sesiones ya solo existen en el almacén, cuánto ocupa todo y si tus transcripciones contienen credenciales.
 - **Exporta a Markdown**, con las credenciales sustituidas.
@@ -36,7 +36,7 @@ Tampoco promete que una sesión restaurada se pueda reanudar. Restaurar te devue
 
 Todo lo anterior es gratis, para siempre. **Pro añade dos cosas**, por **12 € de pago único** (7 € con el código `LANZAMIENTO` hasta el 14 de septiembre de 2026):
 
-- **Vigilancia continua** — las sesiones se copian a medida que cambian, sin pulsar nada.
+- **Vigilancia continua** — las sesiones se copian mientras trabajas, sin pulsar nada: cada cambio queda copiado **como muy tarde 60 segundos después** (antes, a los 5 s, en cuanto la sesión se calma).
 - **Codex como segundo origen** — `~/.codex/sessions` junto a Claude Code.
 
 `SessionKeeper Pro: conseguir una licencia` abre el pago ([Polar](https://polar.sh) es el merchant of record: factura y liquida el IVA). Una clave activa **tres** equipos, y puedes liberar una activación desde tu portal de cliente de Polar.

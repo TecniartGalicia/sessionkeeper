@@ -8,7 +8,9 @@ import {
   deactivateLicenseCommand,
   isPro,
   licenseStatusCommand,
+  onDidChangeProStatus,
   openCheckout,
+  proStatus,
 } from './licenseService';
 
 /**
@@ -45,6 +47,16 @@ export class ProFeatures implements vscode.Disposable {
           void this.sync();
         }
       }),
+      // Sin esto, una clave revocada seguía vigilando hasta reiniciar VS Code: exactamente al
+      // revés de lo que promete la ficha, y dando de pago algo que ya no está pagado.
+      onDidChangeProStatus.event(() => void this.sync()),
+      // Y para que ese cambio se note pronto, se revalida al volver a la ventana (con la caché
+      // de 60 s y la revalidación de 24 h del propio servicio: no añade tráfico).
+      vscode.window.onDidChangeWindowState((state) => {
+        if (state.focused) {
+          void proStatus(this.context).then(() => this.sync());
+        }
+      }),
     ];
     void this.sync();
     return items;
@@ -64,7 +76,13 @@ export class ProFeatures implements vscode.Disposable {
 
     if (wanted && pro) {
       if (!this.auto) {
-        this.auto = new AutoBackup(this.keeper, this.onBackup);
+        // El sosiego y el tope se pueden acortar por ajuste oculto para poder probarlos.
+        const cfg = vscode.workspace.getConfiguration('sessionkeeper');
+        this.auto = new AutoBackup(this.keeper, this.onBackup, {
+          quietMs: cfg.get<number>('internal.quietMs') || undefined,
+          maxWaitMs: cfg.get<number>('internal.maxWaitMs') || undefined,
+          intervalMs: cfg.get<number>('internal.intervalMs') || undefined,
+        });
         this.auto.start();
       }
       return;
