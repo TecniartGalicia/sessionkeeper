@@ -31,5 +31,9 @@
   "Size": "Tamaño",
   "Pending": "Pendiente",
   "Last backup": "Última copia",
-  "Versions": "Versiones"
+  "Versions": "Versiones",
+  "This is a {0} window: SessionKeeper sees the remote sessions and would store the vault there, where it may not survive. Set \"sessionkeeper.vaultPath\" to a folder that persists.": "Esta es una ventana {0}: SessionKeeper ve las sesiones del remoto y guardaría ahí el almacén, donde puede no sobrevivir. Pon en «sessionkeeper.vaultPath» una carpeta que persista.",
+  "Disk budget reached: nothing was deleted, but some sessions were not copied. Raise the budget in the vault manifest or free space.": "Presupuesto de disco agotado: no se ha borrado nada, pero han quedado sesiones sin copiar. Sube el presupuesto en el manifiesto del almacén o libera espacio.",
+  "{0} parts could not be copied — see the log": "{0} partes no se han podido copiar: mira el registro",
+  "Show log": "Ver el registro"
 }

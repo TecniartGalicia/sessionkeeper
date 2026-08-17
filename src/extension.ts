@@ -58,7 +58,27 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   provider.refresh();
+  warnAboutRemote();
   log('activated');
+}
+
+/**
+ * En una ventana remota (WSL, contenedor, SSH) la extensión corre en el remoto: ve el
+ * `~/.claude` de ese lado y guardaría el almacén en un sistema de ficheros que puede
+ * desaparecer al reconstruir el contenedor. Copia de seguridad que se borra sola.
+ */
+function warnAboutRemote(): void {
+  const remote = vscode.env.remoteName;
+  if (!remote) {
+    return;
+  }
+  const configured = vscode.workspace.getConfiguration('sessionkeeper').get<string>('vaultPath')?.trim();
+  if (configured) {
+    return;
+  }
+  void vscode.window.showWarningMessage(
+    l10n.t('This is a {0} window: SessionKeeper sees the remote sessions and would store the vault there, where it may not survive. Set "sessionkeeper.vaultPath" to a folder that persists.', remote),
+  );
 }
 
 async function openMarkdown(content: string): Promise<void> {
@@ -102,6 +122,26 @@ async function backupAll(provider: SessionsProvider): Promise<void> {
         parts.push(
           l10n.t('credentials detected in the transcripts ({0}) — keep the vault private', outcome.secrets.map((s) => s.label).join(', ')),
         );
+      }
+
+      if (outcome.budgetReached) {
+        void vscode.window.showWarningMessage(
+          l10n.t('Disk budget reached: nothing was deleted, but some sessions were not copied. Raise the budget in the vault manifest or free space.'),
+        );
+      }
+
+      if (outcome.errors.length) {
+        for (const failure of outcome.errors) {
+          log(`ERROR copia: ${failure}`);
+        }
+        void vscode.window.showWarningMessage(
+          l10n.t('{0} parts could not be copied — see the log', outcome.errors.length),
+          l10n.t('Show log'),
+        ).then((choice) => {
+          if (choice) {
+            output?.show(true);
+          }
+        });
       }
       void vscode.window.showInformationMessage(parts.join(' · '));
     },

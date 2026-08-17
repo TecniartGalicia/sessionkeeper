@@ -26,8 +26,14 @@ export function isSessionLive(env: Env, sessionId: string, homeOverride?: string
   let entries: string[];
   try {
     entries = fs.readdirSync(dir);
-  } catch {
-    return { live: false, reason: 'no hay registro de sesiones vivas' };
+  } catch (err) {
+    // Sin registro no se puede afirmar que esté muerta: otro CLAUDE_CONFIG_DIR, la app de
+    // escritorio o una versión que no escribe pids darían "muerta" y dejarían restaurar
+    // encima de una sesión en marcha. Ante la duda, VIVA.
+    const missing = (err as NodeJS.ErrnoException).code === 'ENOENT';
+    return missing
+      ? { live: false, reason: 'no existe el registro de sesiones vivas' }
+      : { live: true, reason: 'no se ha podido leer el registro de sesiones vivas' };
   }
 
   for (const name of entries) {
@@ -71,6 +77,9 @@ export interface RestoreOptions {
   readonly overwrite?: boolean;
   /** Destino alternativo; si no se indica, se usa la ruta original de la parte. */
   readonly targetRoot?: string;
+  /** Si se pasa, se vuelve a comprobar aquí que la sesión no esté viva (no solo en la UI). */
+  readonly env?: Env;
+  readonly claudeHome?: string;
 }
 
 function sidecarOf(target: string): string {
@@ -119,11 +128,25 @@ export function restoreSession(
   session: DiscoveredSession,
   options: RestoreOptions = {},
 ): RestoreResult[] {
+  if (options.env && isSessionLive(options.env, session.sessionId, options.claudeHome).live) {
+    throw new Error(
+      'la sesión está en marcha: ciérrala antes de restaurar (escribir encima pierde lo que el agente escriba después)',
+    );
+  }
+
   const plans = planRestore(session, options);
+
+  // Fase 1: reconstruir y verificar TODAS las partes antes de tocar el disco del usuario.
+  // Si una copia está corrupta, no se ha escrito nada todavía y no queda nada a medias.
+  const rebuilt = new Map<string, Buffer>();
+  for (const plan of plans) {
+    rebuilt.set(plan.rel, rebuildPart(vaultRoot, session, plan.rel));
+  }
+
   const results: RestoreResult[] = [];
 
   for (const plan of plans) {
-    const data = rebuildPart(vaultRoot, session, plan.rel);
+    const data = rebuilt.get(plan.rel)!;
 
     let backedUpTo: string | undefined;
     if (fs.existsSync(plan.target)) {

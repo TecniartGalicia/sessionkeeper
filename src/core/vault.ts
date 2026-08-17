@@ -30,6 +30,8 @@ export interface PartState {
   copiedBytes: number;
   headHash: string;
   tailHash: string;
+  /** Huella de las sondas intermedias; vacía si el fichero es más corto que dos sondas. */
+  midHash: string;
   chunks: ChunkRecord[];
   updatedAt: string;
   /** Puesto a true cuando se abre una generación posterior; la cerrada sigue restaurable. */
@@ -47,28 +49,107 @@ export interface SessionMeta {
   /** True cuando el original ya no está en disco: la copia es lo único que queda. */
   orphan: boolean;
   sourceRoot: string;
+  /** Ruta original de cada parte, para poder restaurarla cuando ya no exista en disco. */
+  parts?: { rel: string; path: string }[];
 }
 
-/** Escritura atómica: fichero temporal + rename, y fsync antes de renombrar. */
+/** Permisos del almacén: solo el dueño. Las transcripciones pueden contener credenciales. */
+export const DIR_MODE = 0o700;
+export const FILE_MODE = 0o600;
+
+const RETRYABLE = new Set(['EPERM', 'EACCES', 'EBUSY', 'ENOTEMPTY']);
+
+function sleepBusy(ms: number): void {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    /* espera activa: son decenas de milisegundos y no hay await en esta capa */
+  }
+}
+
+/**
+ * Escritura atómica: temporal + `rename`, con `fsync` antes de renombrar.
+ *
+ * El `rename` sobre un destino existente falla con EPERM en Windows cuando el antivirus o
+ * el indexador tienen el fichero abierto un instante — medido en este equipo: **118 fallos
+ * de 2.000 escrituras** del mismo fichero. Sin reintento, ese 6 % aborta la copia entera.
+ */
 export function writeAtomic(file: string, data: Buffer | string): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: DIR_MODE });
   const tmp = `${file}.tmp-${process.pid}`;
-  const fd = fs.openSync(tmp, 'w');
+  const fd = fs.openSync(tmp, 'w', FILE_MODE);
   try {
     fs.writeFileSync(fd, data);
     fs.fsyncSync(fd);
   } finally {
     fs.closeSync(fd);
   }
-  fs.renameSync(tmp, file);
+
+  let delay = 10;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      fs.renameSync(tmp, file);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? '';
+      if (attempt >= 5 || !RETRYABLE.has(code)) {
+        try {
+          fs.rmSync(tmp, { force: true });
+        } catch {
+          /* el temporal se limpiará en el próximo `sweepTempFiles` */
+        }
+        throw err;
+      }
+      sleepBusy(delay);
+      delay = Math.min(delay * 2, 200);
+    }
+  }
 }
 
+/**
+ * Lee un JSON del almacén. Solo "no existe" devuelve `undefined`: un fichero **ilegible**
+ * (bloqueado, a medio sincronizar, corrupto) tiene que propagarse, porque tratarlo como
+ * inexistente hace que el motor recopie desde cero encima de los trozos ya escritos.
+ */
 export function readJson<T>(file: string): T | undefined {
+  let raw: string;
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8')) as T;
-  } catch {
-    return undefined;
+    raw = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined;
+    }
+    throw err;
   }
+  try {
+    return JSON.parse(raw) as T;
+  } catch (err) {
+    throw new Error(`${file} no es JSON legible: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** Restos de escrituras atómicas interrumpidas. Se barren al abrir el almacén. */
+export function sweepTempFiles(dir: string): number {
+  let removed = 0;
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      removed += sweepTempFiles(full);
+    } else if (/\.tmp-\d+$/.test(entry.name)) {
+      try {
+        fs.rmSync(full, { force: true });
+        removed++;
+      } catch {
+        /* si otro proceso lo está escribiendo ahora mismo, se deja */
+      }
+    }
+  }
+  return removed;
 }
 
 /** Identificador de equipo: evita que dos máquinas choquen en una carpeta sincronizada. */

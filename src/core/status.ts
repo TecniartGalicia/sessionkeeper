@@ -22,6 +22,14 @@ export interface SessionStatus {
   readonly generations: number;
 }
 
+function statSize(file: string): number | undefined {
+  try {
+    return fs.statSync(file).size;
+  } catch {
+    return undefined;
+  }
+}
+
 export function sessionStatus(vaultRoot: string, session: DiscoveredSession): SessionStatus {
   const meta = readJson<SessionMeta>(path.join(sessionDir(vaultRoot, session), 'meta.json'));
 
@@ -41,11 +49,15 @@ export function sessionStatus(vaultRoot: string, session: DiscoveredSession): Se
         anyState = true;
         copied += state.copiedBytes;
       }
-      // Atajo barato: si el tamaño no ha cambiado desde lo copiado, no hace falta leer las
-      // puntas del fichero. Refrescar el árbol con cientos de partes tiene que costar `stat`,
-      // no 128 KB de lectura por parte.
-      if (state && part.size === state.copiedBytes) {
+      // Atajo barato: un `stat` decide. Si el fichero está y su tamaño es el ya copiado,
+      // no hace falta leer las puntas; refrescar el árbol con cientos de partes tiene que
+      // costar `stat`, no 128 KB por parte. Pero el `stat` es obligatorio: sin él, una
+      // sesión reconstruida desde el almacén parecería copiada en vez de huérfana.
+      const live = statSize(part.path);
+      if (state && live === state.copiedBytes) {
         allMissing = false;
+      } else if (state && live === undefined) {
+        // el original ya no está
       } else {
         const plan = planPart(part.path, part.rel, state);
         if (plan.action === 'append' || plan.action === 'new-generation') {

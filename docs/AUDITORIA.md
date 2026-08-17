@@ -79,3 +79,41 @@ Dos auditorías independientes sobre la v1 de `ANALISIS.md` y `PLAN.md`: una **t
 - La premisa **append-only** se sostiene: la compactación añade en vez de reescribir, los prefijos son estables entre muestras y `sessionId` coincide con el nombre del fichero en las 400 comprobadas. El motor de chunks es viable con las correcciones T-10 y T-19.
 - La conclusión de fondo — **la corrupción no es el caso común; el caso común es el borrado** — se sostiene con la población corregida (91/91 ficheros íntegros).
 - El dolor es real, grande y creciente: 120 incidencias abiertas con la etiqueta `data-loss` y casos de agosto de 2026 con cientos de transcripciones perdidas.
+
+---
+
+## §1 — Auditoría del motor (F1), 2026-08-17
+
+Agente independiente sobre `src/` completo, con verificación ejecutando código: 20 hallazgos, **6 bloqueantes**. Veredicto: *"F1 no está cerrable"*. Todos aplicados antes de publicar.
+
+### Bloqueantes
+
+| # | Hallazgo | Cómo se verificó | Resolución |
+|---|---|---|---|
+| A-1 | **Al borrarse la sesión desaparecía también de la extensión.** `discover()` solo enumeraba el origen, así que el día de la retención la sesión no se podía ver, restaurar ni exportar, y el estado `orphan` era inalcanzable. El caso de uso central no funcionaba | `antes de borrar: 1 sesión · después: 0 · doctor menciona huérfanas: false` | `core/vaultIndex.ts`: el almacén se enumera y se une con el origen. `meta.json` guarda ahora la ruta original de cada parte. Tres tests nuevos que **descubren desde cero** tras borrar (el test anterior pasaba reutilizando el objeto en memoria: validaba una función rota) |
+| A-2 | **Sin lock, dos ventanas corrompían el vault en silencio** y la vista seguía en verde | dos procesos → `rebuild FALLA: trozo 2 corrupto`, `estado: backed-up` | `core/lock.ts` con pid + latido y relevo a los 10 min; numeración de trozo por `max(n)+1` |
+| A-3 | **`writeAtomic` sin reintento**: el `rename` falla con EPERM en Windows cuando el antivirus toca el fichero | **118 fallos de 2.000 escrituras (5,9 %)**; el bucle de copia reventaba en el ciclo 188 | reintentos con backoff sobre EPERM/EACCES/EBUSY y barrido de temporales huérfanos |
+| A-4 | **Una reescritura del medio no se detectaba**: las huellas solo cubrían las dos puntas, así que la copia divergía del original para siempre | 10 bytes alterados en el centro → `acción: skip`, copia ≠ disco | sondas repartidas (`probeMid`, una cada 16 MB, mínimo una) guardadas en el estado; test que altera el centro conservando tamaño y puntas |
+| A-5 | **La restauración borraba el destino antes de escribir**, el `wx` era decorativo, y una parte corrupta dejaba la sesión a medias | restauración multiparte fallida con `main.jsonl` ya machacado | dos fases: se reconstruyen y verifican **todas** las partes antes de tocar el disco; escritura a temporal + `rename`; copia previa siempre |
+| A-6 | **`isSessionLive` devolvía "muerta" cuando no encontraba el registro**, permitiendo restaurar sobre una sesión viva | sin `~/.claude/sessions` → `live:false` | ante la duda, VIVA; y la comprobación se repite **dentro** de `restoreSession`, no solo en la interfaz (había TOCTOU con el diálogo modal en medio) |
+
+### Importantes
+
+| # | Hallazgo | Resolución |
+|---|---|---|
+| A-7 | Pico de RSS de 461 MB con un fichero de 199 MB (se leía el delta entero) | copia por bloques de 8 MB persistiendo el estado tras cada uno |
+| A-8 | Cada refresco del árbol bloqueaba ~2 s el hilo de extensiones | el estado se decide con un `stat`; las sondas solo cuando el tamaño cambió |
+| A-9 | **El aviso de secretos no detectaba secretos**: 0 de 7 formatos reales, y 3 falsos positivos (una ruta temporal se leía como clave `sk-`) | patrones reescritos y anclados (`github_pat_`, `Bearer`, URLs con credenciales, `npm_`, minúsculas), filtro de marcadores solo en los genéricos, y escaneo de **todas** las partes copiadas en vez de los últimos 256 KB de la transcripción. 20 tests de tabla |
+| A-10 | Vault creado legible por cualquier usuario del equipo | `0700` en directorios y `0600` en ficheros |
+| A-11 | `budgetBytes` se escribía y no lo leía nadie: el almacén crecía sin límite | se comprueba antes de cada sesión; al llegar al tope **avisa y para, sin borrar nada** |
+| A-12 | **`restore.mjs` ignoraba las generaciones** (la vieja podía pisar a la nueva) y no verificaba ningún hash | reescrito como fichero del paquete (`assets/restore.mjs`): última generación por parte, `sha256` por trozo y rutas largas de Windows. Las plantillas incrustadas se comían las barras invertidas de los `\d` y del prefijo `\?\` |
+| A-13 | Un error de E/S en una parte abortaba la copia de todo lo demás | `try/catch` por parte y por sesión, acción `error`, y aviso con enlace al registro |
+| A-14 | `extensionKind: ["workspace"]` en remotos guarda el vault en un contenedor que se destruye | aviso explícito al activar en ventana remota si no hay `vaultPath` fijado |
+| A-15 | `readJson` no distinguía "no existe" de "ilegible", y eso recopiaba desde cero pisando trozos | solo ENOENT devuelve `undefined`; lo ilegible se propaga |
+| A-18 | Exportar el mayor rollout (536 MiB) lanzaba *"Cannot create a string longer than…"* | tope de 64 MB, exportando la parte final y marcándolo como truncado |
+
+### Pendiente, anotado y no bloqueante
+
+- **A-16**: un trozo por ciclo produce muchos trozos pequeños (medido: 188 trozos = 1,3× el tamaño del origen). Solo se dispara con vigilancia continua, que llega con el Pro: se acumulará por umbral antes de cerrar trozo.
+- **A-17**: `probeFile` era código muerto y contradecía a `probesOfSource`; eliminado al introducir las sondas.
+- **A-19**: `safeCutOffset` puede recorrer muchas líneas hacia atrás en el peor caso; se acotará junto con A-16.

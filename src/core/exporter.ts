@@ -44,7 +44,16 @@ export interface ExportResult {
   readonly markdown: string;
   readonly secrets: readonly SecretHit[];
   readonly messages: number;
+  /** Cierto cuando la sesión era tan grande que solo se exportó su parte final. */
+  readonly truncated?: boolean;
 }
+
+/**
+ * Tope de la exportación. Node no puede crear cadenas de más de ~512 MB, y el mayor
+ * rollout medido en el corpus real ocupa 536 MiB: sin este tope, exportarlo lanza
+ * "Cannot create a string longer than…" en lugar de dar algo útil.
+ */
+export const MAX_EXPORT_BYTES = 64 * 1024 * 1024;
 
 /** Convierte una transcripción JSONL en Markdown legible. Tolera líneas ilegibles. */
 export function toMarkdown(jsonl: string, options: ExportOptions = {}): ExportResult {

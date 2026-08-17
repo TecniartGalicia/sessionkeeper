@@ -23,27 +23,45 @@ export function readRange(file: string, start: number, length: number): Buffer {
   }
 }
 
-export interface Probes {
-  /** sha256 de los primeros PROBE_BYTES (o de todo, si es más corto). */
-  readonly head: string;
-  /** sha256 de los últimos PROBE_BYTES de la parte ya copiada. */
-  readonly tail: string;
-  /** Bytes sobre los que se calculó `tail`. */
-  readonly tailFrom: number;
-}
+/** Cada cuántos bytes se coloca una sonda intermedia. */
+export const PROBE_EVERY = 16 * 1024 * 1024;
+/** Tope de sondas intermedias, para que un fichero enorme no dispare la lectura. */
+export const MAX_PROBES = 24;
 
 /**
- * Huellas de continuidad de un fichero de solo-añadir.
+ * Huellas de continuidad de un fichero de solo-añadir: cabecera, cola y sondas repartidas.
  *
- * La v1 del plan solo comprobaba la cola: una reescritura que conservara esos últimos
- * 64 KB pasaba desapercibida y producía una copia Frankenstein que aun así cuadraba con
- * su hash acumulado (hallazgo T-10). Por eso se comprueban las dos puntas.
+ * Comprobar solo la cola dejaba pasar una reescritura que la conservara (hallazgo T-10);
+ * comprobar solo las dos puntas deja pasar una reescritura **del medio**, que produce
+ * exactamente el mismo fichero Frankenstein: cuadra con su hash acumulado y no es el
+ * original. Con una sonda cada 16 MB, verificar un fichero de 324 MB cuesta ~1,3 MB de
+ * lectura, y el 68 % de los bytes del corpus real está en 9 ficheros de ese tamaño.
  */
-export function probeFile(file: string, copiedBytes: number): Probes {
-  const head = sha256(readRange(file, 0, Math.min(PROBE_BYTES, Math.max(copiedBytes, 0) || PROBE_BYTES)));
-  const tailFrom = Math.max(0, copiedBytes - PROBE_BYTES);
-  const tail = sha256(readRange(file, tailFrom, copiedBytes - tailFrom));
-  return { head, tail, tailFrom };
+export function probeOffsets(copiedBytes: number): number[] {
+  const offsets: number[] = [];
+  if (copiedBytes <= 2 * PROBE_BYTES) {
+    return offsets;
+  }
+  const usable = copiedBytes - 2 * PROBE_BYTES;
+  // Siempre al menos una sonda intermedia: un fichero de 400 KB también puede reescribirse
+  // por el medio conservando tamaño y puntas, y ese es justo el fallo que hay que cazar.
+  const count = Math.max(1, Math.min(MAX_PROBES, Math.ceil(usable / PROBE_EVERY)));
+  for (let i = 1; i <= count; i++) {
+    offsets.push(PROBE_BYTES + Math.floor((usable * i) / (count + 1)));
+  }
+  return offsets;
+}
+
+export function probeMid(file: string, copiedBytes: number): string {
+  const offsets = probeOffsets(copiedBytes);
+  if (!offsets.length) {
+    return '';
+  }
+  const hash = createHash('sha256');
+  for (const offset of offsets) {
+    hash.update(readRange(file, offset, Math.min(PROBE_BYTES, copiedBytes - offset)));
+  }
+  return hash.digest('hex');
 }
 
 /**

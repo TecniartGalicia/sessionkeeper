@@ -1,16 +1,30 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { backupSession, rebuildPart } from '../core/backup';
+import { backupSession, rebuildPart, type SessionResult } from '../core/backup';
 import { discoverClaude, discoverCodex, type DiscoveredSession } from '../core/discover';
 import { readRetention, runDoctor, type Finding } from '../core/doctor';
-import { toMarkdown, type ExportResult } from '../core/exporter';
+import { MAX_EXPORT_BYTES, toMarkdown, type ExportResult } from '../core/exporter';
 import { acquireLock } from '../core/lock';
 import { defaultVaultRoot, type Env } from '../core/paths';
 import { restoreSession, isSessionLive, writeRestoreDocs, type RestoreOptions, type RestoreResult } from '../core/restore';
 import { scanText, type SecretHit } from '../core/secrets';
 import { sessionStatus, vaultSize, type SessionStatus } from '../core/status';
-import { ensureManifest, hostId, writeAtomic } from '../core/vault';
+import { discoverVault } from '../core/vaultIndex';
+import { DIR_MODE, ensureManifest, hostId, sweepTempFiles, writeAtomic } from '../core/vault';
+
+/** Localiza un fichero de `assets/` tanto en el bundle (`dist/`) como en los tests (`out/`). */
+function findAsset(name: string): string | undefined {
+  let dir = __dirname;
+  for (let i = 0; i < 5; i++) {
+    const candidate = path.join(dir, 'assets', name);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    dir = path.dirname(dir);
+  }
+  return undefined;
+}
 
 export interface KeeperConfig {
   readonly env: Env;
@@ -30,6 +44,10 @@ export interface BackupOutcome {
   readonly rotated: readonly string[];
   readonly waiting: number;
   readonly secrets: readonly SecretHit[];
+  /** Partes que no se pudieron copiar, con su motivo. Se enseñan; nunca se ocultan. */
+  readonly errors: readonly string[];
+  /** Cierto cuando se paró por presupuesto de disco: nunca se borra para hacer sitio. */
+  readonly budgetReached?: boolean;
 }
 
 /**
@@ -50,8 +68,18 @@ export class Keeper {
       ? discoverCodex(this.config.env)
       : { sessions: [], memoryDirs: [], warnings: [] };
 
-    const all = [...claude.sessions, ...codex.sessions].sort((a, b) => b.lastModified - a.lastModified);
     const root = this.vaultRoot;
+
+    // Unión origen ∪ almacén: una sesión que ya se borró del disco sigue estando aquí, que
+    // es exactamente para lo que existe el producto. Gana la del origen cuando está en las dos.
+    const byKey = new Map<string, DiscoveredSession>();
+    for (const session of discoverVault(root)) {
+      byKey.set(`${session.provider}/${session.projectSlug}/${session.sessionId}`, session);
+    }
+    for (const session of [...claude.sessions, ...codex.sessions]) {
+      byKey.set(`${session.provider}/${session.projectSlug}/${session.sessionId}`, session);
+    }
+    const all = [...byKey.values()].sort((a, b) => b.lastModified - a.lastModified);
 
     return {
       views: all.map((session) => ({ session, status: sessionStatus(root, session) })),
@@ -66,8 +94,9 @@ export class Keeper {
     onProgress?: (done: number, total: number, current: string) => boolean,
   ): BackupOutcome {
     const root = this.vaultRoot;
-    fs.mkdirSync(root, { recursive: true });
-    ensureManifest(root, hostId(os.hostname()));
+    fs.mkdirSync(root, { recursive: true, mode: DIR_MODE });
+    const manifest = ensureManifest(root, hostId(os.hostname()));
+    sweepTempFiles(root);
     writeRestoreDocs(root);
     this.writeRestoreScript(root);
 
@@ -76,6 +105,9 @@ export class Keeper {
 
     let bytes = 0;
     let waiting = 0;
+    let budgetReached = false;
+    let used = vaultSize(root);
+    const errors: string[] = [];
     const rotated: string[] = [];
     const secrets = new Map<string, SecretHit>();
     let done = 0;
@@ -85,7 +117,20 @@ export class Keeper {
         if (onProgress && !onProgress(done, sessions.length, session.sessionId)) {
           break;
         }
-        const result = backupSession(root, session);
+        // Presupuesto de disco: se para y se avisa. Nunca se borra la última copia de nada
+        // para hacer sitio — un producto de copias que borra copias no sirve para nada.
+        if (manifest.budgetBytes > 0 && used >= manifest.budgetBytes) {
+          budgetReached = true;
+          break;
+        }
+        let result;
+        try {
+          result = backupSession(root, session);
+        } catch (err) {
+          errors.push(`${session.sessionId}: ${err instanceof Error ? err.message : String(err)}`);
+          done++;
+          continue;
+        }
         bytes += result.bytesCopied;
         for (const part of result.parts) {
           if (part.action === 'new-generation') {
@@ -94,8 +139,12 @@ export class Keeper {
           if (part.action === 'wait') {
             waiting++;
           }
+          if (part.action === 'error') {
+            errors.push(`${session.sessionId} · ${part.rel}: ${part.reason ?? 'error de E/S'}`);
+          }
         }
-        for (const hit of this.scanNewBytes(session)) {
+        used += result.bytesCopied;
+        for (const hit of this.scanCopied(session, result)) {
           const prev = secrets.get(hit.id);
           secrets.set(hit.id, { ...hit, count: (prev?.count ?? 0) + hit.count });
         }
@@ -106,33 +155,51 @@ export class Keeper {
       lock.release();
     }
 
-    return { sessions: done, bytesCopied: bytes, rotated, waiting, secrets: [...secrets.values()] };
+    return { sessions: done, bytesCopied: bytes, rotated, waiting, secrets: [...secrets.values()], errors, budgetReached };
   }
 
-  /** Aviso de credenciales: se mira la cola de la transcripción, no el fichero entero. */
-  private scanNewBytes(session: DiscoveredSession): SecretHit[] {
-    const main = session.parts.find((p) => p.kind === 'main');
-    if (!main) {
-      return [];
-    }
-    try {
-      const size = fs.statSync(main.path).size;
-      const from = Math.max(0, size - 256 * 1024);
-      const fd = fs.openSync(main.path, 'r');
-      try {
-        const buf = Buffer.alloc(size - from);
-        fs.readSync(fd, buf, 0, buf.length, from);
-        return scanText(buf.toString('utf8'));
-      } finally {
-        fs.closeSync(fd);
+  /**
+   * Aviso de credenciales sobre lo que se acaba de copiar, en TODAS las partes (también
+   * subagentes y salidas de herramientas, que es justo donde acaba volcado un `.env`).
+   * Se limita a 1 MB por parte para no releer ficheros enteros.
+   */
+  private scanCopied(session: DiscoveredSession, result: SessionResult): SecretHit[] {
+    const hits: SecretHit[] = [];
+    for (const part of result.parts) {
+      if (part.bytesCopied <= 0) {
+        continue;
       }
-    } catch {
-      return [];
+      const source = session.parts.find((p) => p.rel === part.rel);
+      if (!source) {
+        continue;
+      }
+      try {
+        const size = fs.statSync(source.path).size;
+        const length = Math.min(part.bytesCopied, 1024 * 1024);
+        const from = Math.max(0, size - length);
+        const fd = fs.openSync(source.path, 'r');
+        try {
+          const buf = Buffer.alloc(Math.min(length, size - from));
+          fs.readSync(fd, buf, 0, buf.length, from);
+          hits.push(...scanText(buf.toString('utf8')));
+        } finally {
+          fs.closeSync(fd);
+        }
+      } catch {
+        /* si no se puede releer, no se avisa: el aviso nunca puede romper la copia */
+      }
     }
+    return hits;
   }
 
   restore(session: DiscoveredSession, options: RestoreOptions = {}): RestoreResult[] {
-    return restoreSession(this.vaultRoot, session, options);
+    // La comprobación de "sesión viva" se repite aquí dentro: entre el aviso de la interfaz
+    // y el clic de confirmación puede haber pasado cualquier cosa.
+    return restoreSession(this.vaultRoot, session, {
+      ...options,
+      env: this.config.env,
+      claudeHome: this.config.claudeHome,
+    });
   }
 
   isLive(session: DiscoveredSession): boolean {
@@ -141,13 +208,24 @@ export class Keeper {
 
   /** Exporta a Markdown desde la COPIA, para poder exportar sesiones ya desaparecidas. */
   export(session: DiscoveredSession, title: string): ExportResult {
-    let jsonl: string;
+    let buffer: Buffer;
     try {
-      jsonl = rebuildPart(this.vaultRoot, session, 'main.jsonl').toString('utf8');
+      buffer = rebuildPart(this.vaultRoot, session, 'main.jsonl');
     } catch {
-      jsonl = fs.readFileSync(session.parts[0].path, 'utf8');
+      buffer = fs.readFileSync(session.parts[0].path);
     }
-    return toMarkdown(jsonl, { title });
+
+    // Sesiones de cientos de MB: se exporta la parte final, que es la que se busca, en vez
+    // de reventar con "Cannot create a string longer than…".
+    const truncated = buffer.length > MAX_EXPORT_BYTES;
+    if (truncated) {
+      const from = buffer.length - MAX_EXPORT_BYTES;
+      const cut = buffer.indexOf(0x0a, from);
+      buffer = buffer.subarray(cut >= 0 ? cut + 1 : from);
+    }
+
+    const result = toMarkdown(buffer.toString('utf8'), { title });
+    return { ...result, truncated };
   }
 
   doctor(sessions: readonly DiscoveredSession[]): { findings: Finding[]; markdown: string } {
@@ -168,39 +246,17 @@ export class Keeper {
   /**
    * Script de recuperación independiente. Va dentro del almacén para que restaurar no
    * dependa nunca de tener la extensión instalada ni una licencia.
+   *
+   * Vive como fichero del paquete (`assets/restore.mjs`) y no incrustado en el código: un
+   * script con expresiones regulares y rutas de Windows dentro de una plantilla pierde las
+   * barras invertidas por el camino, y este fichero es justo el que tiene que funcionar el
+   * día que todo lo demás falle.
    */
   private writeRestoreScript(root: string): void {
-    const script = `#!/usr/bin/env node
-// Recupera un almacén de SessionKeeper sin la extensión: node restore.mjs <vault> <destino>
-import fs from 'node:fs';
-import path from 'node:path';
-import zlib from 'node:zlib';
-
-const [vault, dest] = process.argv.slice(2);
-if (!vault || !dest) {
-  console.error('uso: node restore.mjs <carpeta-del-vault> <carpeta-destino>');
-  process.exit(1);
-}
-const long = (p) => (process.platform === 'win32' && !p.startsWith('\\\\\\\\?\\\\') ? '\\\\\\\\?\\\\' + path.resolve(p) : p);
-let count = 0;
-const walk = (dir) => {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, e.name);
-    if (e.isDirectory()) { walk(full); continue; }
-    if (e.name !== 'gen.json') continue;
-    const state = JSON.parse(fs.readFileSync(full, 'utf8'));
-    const out = path.join(dest, path.relative(vault, path.dirname(path.dirname(dir))), state.rel);
-    fs.mkdirSync(long(path.dirname(out)), { recursive: true });
-    const blocks = state.chunks.map((c) =>
-      zlib.gunzipSync(fs.readFileSync(long(path.join(path.dirname(full), 'chunks', String(c.n).padStart(6, '0') + '.gz')))),
-    );
-    fs.writeFileSync(long(out), Buffer.concat(blocks));
-    count++;
-  }
-};
-walk(vault);
-console.log('recuperados ' + count + ' ficheros en ' + dest);
-`;
-    writeAtomic(path.join(root, 'restore.mjs'), script);
+    const source = findAsset('restore.mjs');
+    if (!source) {
+      return;
+    }
+    writeAtomic(path.join(root, 'restore.mjs'), fs.readFileSync(source));
   }
 }

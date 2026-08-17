@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { gunzipSync, gzipSync } from 'zlib';
-import { PROBE_BYTES, readRange, safeCutOffset, sha256 } from './hash';
+import { PROBE_BYTES, probeMid, readRange, safeCutOffset, sha256 } from './hash';
 import type { DiscoveredSession, SessionPart } from './discover';
 import {
   chunkPath,
@@ -19,7 +19,7 @@ import {
   type SessionMeta,
 } from './vault';
 
-export type PlanAction = 'skip' | 'append' | 'new-generation' | 'missing' | 'wait';
+export type PlanAction = 'skip' | 'append' | 'new-generation' | 'missing' | 'wait' | 'error';
 
 /** Tamaño de bloque de trabajo: acota la memoria y da granularidad ante cortes. */
 export const CHUNK_BYTES = 8 * 1024 * 1024;
@@ -35,12 +35,12 @@ export interface PartPlan {
 }
 
 /** Huellas del origen limitadas a lo ya copiado, para comparar con el estado guardado. */
-function probesOfSource(file: string, copiedBytes: number): { head: string; tail: string } {
+function probesOfSource(file: string, copiedBytes: number): { head: string; tail: string; mid: string } {
   const headLen = Math.min(PROBE_BYTES, copiedBytes);
   const head = sha256(readRange(file, 0, headLen));
   const tailFrom = Math.max(0, copiedBytes - PROBE_BYTES);
   const tail = sha256(readRange(file, tailFrom, copiedBytes - tailFrom));
-  return { head, tail };
+  return { head, tail, mid: probeMid(file, copiedBytes) };
 }
 
 /**
@@ -74,6 +74,9 @@ export function planPart(sourcePath: string, rel: string, state: PartState | und
   }
   if (probes.tail !== state.tailHash) {
     return { action: 'new-generation', rel, pending: size, reason: 'la cola ha cambiado' };
+  }
+  if (probes.mid !== (state.midHash ?? '')) {
+    return { action: 'new-generation', rel, pending: size, reason: 'ha cambiado por el medio' };
   }
   if (size === state.copiedBytes) {
     return { action: 'skip', rel, pending: 0 };
@@ -146,7 +149,8 @@ export function backupPart(
     }
 
     const payload = block.subarray(0, usable);
-    const n = chunks.length + 1;
+    // max(n)+1, no chunks.length+1: si un ciclo anterior dejó un trozo sin registrar, no se pisa.
+    const n = chunks.reduce((max, c) => Math.max(max, c.n), 0) + 1;
     writeAtomic(chunkPath(base, generation, n), gzipSync(payload, { level: GZIP_LEVEL }));
 
     const to = from + usable;
@@ -159,6 +163,7 @@ export function backupPart(
       copiedBytes: to,
       headHash: probes.head,
       tailHash: probes.tail,
+      midHash: probes.mid,
       chunks,
       updatedAt: new Date().toISOString(),
       closed: false,
@@ -190,13 +195,44 @@ export interface SessionResult {
   readonly bytesCopied: number;
 }
 
+/** Conserva las rutas conocidas aunque una parte ya no aparezca en el origen. */
+function mergeParts(
+  previous: { rel: string; path: string }[] | undefined,
+  current: { rel: string; path: string }[],
+): { rel: string; path: string }[] {
+  const byRel = new Map((previous ?? []).map((p) => [p.rel, p]));
+  for (const part of current) {
+    byRel.set(part.rel, part);
+  }
+  return [...byRel.values()];
+}
+
 export function backupSession(vaultRoot: string, session: DiscoveredSession): SessionResult {
   const dir = sessionDir(vaultRoot, session);
   const metaFile = path.join(dir, 'meta.json');
-  const previous = readJson<SessionMeta>(metaFile);
+  let previous: SessionMeta | undefined;
+  try {
+    previous = readJson<SessionMeta>(metaFile);
+  } catch {
+    previous = undefined; // meta ilegible: se reescribe, los trozos no dependen de ella
+  }
   const now = new Date().toISOString();
 
-  const parts = session.parts.map((p) => backupPart(vaultRoot, session, p));
+  // Un fallo de E/S en una parte (antivirus, fichero bloqueado, disco lleno) no puede
+  // tumbar la copia del resto: se anota como 'error' y se sigue.
+  const parts = session.parts.map((p) => {
+    try {
+      return backupPart(vaultRoot, session, p);
+    } catch (err) {
+      return {
+        rel: p.rel,
+        action: 'error' as const,
+        bytesCopied: 0,
+        generation: 0,
+        reason: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
 
   const meta: SessionMeta = {
     formatVersion: VAULT_FORMAT,
@@ -207,6 +243,9 @@ export function backupSession(vaultRoot: string, session: DiscoveredSession): Se
     lastBackupAt: now,
     orphan: parts.length > 0 && parts.every((p) => p.action === 'missing'),
     sourceRoot: path.dirname(session.parts[0]?.path ?? ''),
+    // Las rutas originales viajan con la copia: sin ellas, una sesión ya borrada no sabría
+    // dónde volver.
+    parts: mergeParts(previous?.parts, session.parts.map((p) => ({ rel: p.rel, path: p.path }))),
   };
   writeAtomic(metaFile, JSON.stringify(meta, null, 2));
 
