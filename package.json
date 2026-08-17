@@ -64,7 +64,8 @@
     "test:integration": "npm run build && npm run compile-tests && node ./out/test/integration/runTest.js",
     "l10n": "node scripts/l10n-sync.mjs",
     "package": "vsce package --no-dependencies",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test",
+    "demo": "npm run build && npm run compile-tests && node ./out/test/demo/runDemo.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

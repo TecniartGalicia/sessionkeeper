@@ -12,6 +12,12 @@ Claude Code deletes session transcripts older than `cleanupPeriodDays` at startu
 
 Those transcripts are not chat logs. They are the decisions, the commands, the failed attempts and the reasoning behind code you shipped.
 
+![Sessions with their backup state](https://raw.githubusercontent.com/TecniartGalicia/sessionkeeper/main/media/shots/03-huerfana.png)
+
+*The tree shows each session's state: a green shield means backed up, and the orange archive icon is a session that **no longer exists on disk** — it lives only in the vault now, and can still be restored and exported.*
+
+![The Doctor report](https://raw.githubusercontent.com/TecniartGalicia/sessionkeeper/main/media/shots/04-doctor.png)
+
 ## What it does
 
 - **Backs up the whole session, not just the file.** A Claude Code session is `<id>.jsonl` *plus* a sibling folder with `subagents/` and `tool-results/`. Copy only the transcript and you keep something that looks complete and isn't. SessionKeeper copies all of it, and your `memory/` folder too.

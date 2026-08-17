@@ -12,6 +12,12 @@ Claude Code borra al arrancar las transcripciones más antiguas que `cleanupPeri
 
 Esas transcripciones no son un chat: son las decisiones, los comandos, los intentos fallidos y el razonamiento detrás de código que ya está en producción.
 
+![Sesiones con su estado de copia](https://raw.githubusercontent.com/TecniartGalicia/sessionkeeper/main/media/shots/03-huerfana.png)
+
+*El árbol muestra el estado de cada sesión: el escudo verde es "copiada", y el icono naranja de archivo es una sesión que **ya no existe en el disco** — solo vive en el almacén, y se puede restaurar y exportar igualmente.*
+
+![Informe del diagnóstico](https://raw.githubusercontent.com/TecniartGalicia/sessionkeeper/main/media/shots/04-doctor.png)
+
 ## Qué hace
 
 - **Copia la sesión entera, no solo el fichero.** Una sesión de Claude Code es `<id>.jsonl` **más** una carpeta hermana con `subagents/` y `tool-results/`. Si copias solo la transcripción te queda algo que parece completo y no lo está. SessionKeeper copia todo, y también tu carpeta `memory/`.
