@@ -13,4 +13,12 @@ Primera versión pública.
 - Diagnóstico: riesgo por retención, sesiones que solo existen ya en el almacén, integridad, ocupación y detección de credenciales.
 - Exportación a Markdown con credenciales sustituidas.
 - Almacén en formato abierto con `RESTORE.md` y `restore.mjs` para recuperar sin la extensión.
+- Aviso de credenciales al copiar y sustitución al exportar.
+- Lock del almacén entre ventanas, presupuesto de disco que avisa y para sin borrar nada,
+  y permisos restrictivos (0700/0600) en el almacén.
 - Interfaz en inglés y castellano.
+
+### Notas
+- Esta versión es completamente gratuita. No hay telemetría, cuentas ni llamadas de red.
+- El motor y la restauración pasaron una auditoría independiente antes de publicarse; los
+  seis fallos bloqueantes que encontró están corregidos y documentados en `docs/AUDITORIA.md`.
