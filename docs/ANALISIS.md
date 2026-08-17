@@ -186,8 +186,10 @@ Sin binarios nativos y sin peso en el `.vsix`. La v1 descartó SQLite creyendo q
 ## 6. Modelo de negocio
 
 - **Free**: descubrir, copiar (manual y por temporizador), **restaurar**, exportar, doctor de lectura, aviso de secretos.
-- **Pro 7 € pago único**: vigilancia continua, más de un origen a la vez, retención por generaciones y presupuesto, cifrado del vault, rescate avanzado (índices que mienten, reparación), informes.
+- **Pro 12 € pago único**, con **precio de lanzamiento de 7 € las primeras 4 semanas**: vigilancia continua, más de un origen a la vez, retención por generaciones y presupuesto, cifrado del vault, rescate avanzado (índices que mienten, reparación), informes.
 - Restaurar y exportar **nunca** son de pago.
+
+**Por qué 12 y no 7** (decisión del usuario, 2026-08-17): competimos contra gratis, así que el precio no compra funciones, compra tranquilidad — y por debajo de 10 € una herramienta profesional se lee como juguete. La diferencia de ingresos entre 7 y 12 € con las primeras ventas es irrelevante; la señal de valor no. El anclaje es claro: quien usa Claude Code paga 20-100 $/mes, y esto es un pago único de medio mes a cambio de no perder meses de trabajo. El precio de lanzamiento de 7 € premia a los primeros, crea urgencia real y **se cumple con fecha publicada**. Deja además sitio a un pack ChangeKeeper + SessionKeeper por 18 €.
 
 **Criterio de continuidad, corregido a la realidad**: la v1 pedía >1.500 instalaciones en 60 días, que es el ritmo del líder consolidado (hiztam hace ~870/mes siendo el nº 1). Y el canal propio no está probado: `argalla.changekeeper` y `argalla.handsfree-claude-code` tienen **1 instalación cada una** a día de hoy. Nuevo criterio, **a 30 días**: **300 instalaciones y ≥ 3 ventas**. Si hay instalaciones pero cero ventas, el problema es el precio o el valor, y se responde abriendo el Pro, no gastando más.
 

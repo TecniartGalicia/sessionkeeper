@@ -1,9 +1,16 @@
 {
   "view.sessions": "Sessions",
-  "welcome.empty": "SessionKeeper is not watching anything yet.\n[Show storage locations](command:sessionkeeper.showStorage)",
+  "welcome.empty": "No agent sessions found yet.\n[Show storage locations](command:sessionkeeper.showStorage)\n\nSessionKeeper reads Claude Code's local session files and keeps a versioned copy in a folder you choose.",
+  "cmd.backupAll": "Back up all sessions now",
+  "cmd.backupSession": "Back up this session",
+  "cmd.restoreSession": "Restore this session…",
+  "cmd.exportSession": "Export as Markdown",
+  "cmd.doctor": "Doctor: what's at risk",
   "cmd.refresh": "Refresh",
+  "cmd.openVault": "Open the vault folder",
   "cmd.showStorage": "Show storage locations",
   "cmd.showLog": "Show log",
-  "cfg.vaultPath": "Folder where backups are stored. Leave empty to use the default location for your system. Pick a folder you already back up (external drive, NAS); if you pick a cloud-synced folder, remember transcripts can contain credentials.",
-  "cfg.claudeHome": "Override the Claude Code configuration folder (defaults to `CLAUDE_CONFIG_DIR`, or `~/.claude`)."
+  "cfg.vaultPath": "Folder where backups are stored. Leave empty to use the default location for your system. Pick a folder you already back up (external drive, NAS). If you pick a cloud-synced folder, remember transcripts can contain credentials.",
+  "cfg.claudeHome": "Override the Claude Code configuration folder (defaults to `CLAUDE_CONFIG_DIR`, or `~/.claude`).",
+  "cfg.includeCodex": "Also list and back up Codex sessions (`~/.codex/sessions`). Experimental."
 }

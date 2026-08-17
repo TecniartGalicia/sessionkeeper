@@ -1,9 +1,16 @@
 {
   "view.sessions": "Sesiones",
-  "welcome.empty": "SessionKeeper aún no vigila nada.\n[Ver dónde busca](command:sessionkeeper.showStorage)",
+  "welcome.empty": "Todavía no se han encontrado sesiones de agente.\n[Ver dónde busca](command:sessionkeeper.showStorage)\n\nSessionKeeper lee los ficheros de sesión de Claude Code y guarda una copia versionada en la carpeta que elijas.",
+  "cmd.backupAll": "Copiar todas las sesiones ahora",
+  "cmd.backupSession": "Copiar esta sesión",
+  "cmd.restoreSession": "Restaurar esta sesión…",
+  "cmd.exportSession": "Exportar como Markdown",
+  "cmd.doctor": "Diagnóstico: qué está en riesgo",
   "cmd.refresh": "Actualizar",
+  "cmd.openVault": "Abrir la carpeta del almacén",
   "cmd.showStorage": "Ver dónde busca y dónde copia",
   "cmd.showLog": "Ver el registro",
-  "cfg.vaultPath": "Carpeta donde se guardan las copias. Vacío = la carpeta por defecto de tu sistema. Elige una que ya respaldes (disco externo, NAS); si eliges una carpeta sincronizada con la nube, ten en cuenta que las transcripciones pueden contener credenciales.",
-  "cfg.claudeHome": "Carpeta de configuración de Claude Code (por defecto `CLAUDE_CONFIG_DIR`, o `~/.claude`)."
+  "cfg.vaultPath": "Carpeta donde se guardan las copias. Vacío = la carpeta por defecto de tu sistema. Elige una que ya respaldes (disco externo, NAS). Si eliges una carpeta sincronizada con la nube, ten en cuenta que las transcripciones pueden contener credenciales.",
+  "cfg.claudeHome": "Carpeta de configuración de Claude Code (por defecto `CLAUDE_CONFIG_DIR`, o `~/.claude`).",
+  "cfg.includeCodex": "Listar y copiar también las sesiones de Codex (`~/.codex/sessions`). Experimental."
 }
