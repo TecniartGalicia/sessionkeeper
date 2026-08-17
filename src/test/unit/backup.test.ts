@@ -5,6 +5,7 @@ import { backupSession, rebuildPart, availableGenerations } from '../../core/bac
 import { discoverClaude } from '../../core/discover';
 import { restoreSession, planRestore, isSessionLive } from '../../core/restore';
 import { safeCutOffset } from '../../core/hash';
+import { acquireLock, STALE_MS } from '../../core/lock';
 import { appendLines, jsonl, line, makeSandbox, writeSession, type Sandbox } from './fixtures';
 
 const SESSION = '73425e8d-12ef-4bdc-8976-0e5b6db7694a';
@@ -270,5 +271,44 @@ describe('core/backup — ficheros grandes', () => {
     const rebuilt = rebuildPart(box.vault, session, 'main.jsonl');
     assert.strictEqual(rebuilt.length, size);
     assert.deepStrictEqual(rebuilt, fs.readFileSync(transcript));
+  });
+});
+
+describe('core/lock', () => {
+  let box: Sandbox;
+  beforeEach(() => {
+    box = makeSandbox('lock');
+  });
+  afterEach(() => box.dispose());
+
+  it('impide que dos procesos vivos copien a la vez', () => {
+    const first = acquireLock(box.vault, 'equipo');
+    // Otro proceso: se simula dejando el lock a nombre de un pid vivo distinto del nuestro.
+    fs.writeFileSync(
+      path.join(box.vault, '.lock'),
+      JSON.stringify({ pid: process.ppid, host: 'otro', takenAt: new Date().toISOString(), heartbeatMs: Date.now() }),
+    );
+    assert.throws(() => acquireLock(box.vault, 'equipo'), /otro proceso/);
+    first.release();
+  });
+
+  it('recupera un lock abandonado por un proceso muerto', () => {
+    fs.writeFileSync(
+      path.join(box.vault, '.lock'),
+      JSON.stringify({ pid: 999999, host: 'muerto', takenAt: new Date().toISOString(), heartbeatMs: Date.now() }),
+    );
+    const lock = acquireLock(box.vault, 'equipo');
+    lock.release();
+    assert.ok(!fs.existsSync(path.join(box.vault, '.lock')), 'al soltar, el lock desaparece');
+  });
+
+  it('recupera un lock cuyo latido lleva parado más de diez minutos', () => {
+    fs.writeFileSync(
+      path.join(box.vault, '.lock'),
+      JSON.stringify({ pid: process.pid, host: 'yo', takenAt: new Date().toISOString(), heartbeatMs: Date.now() - STALE_MS - 1 }),
+    );
+    const lock = acquireLock(box.vault, 'equipo');
+    lock.release();
+    assert.ok(true);
   });
 });

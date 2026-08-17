@@ -41,12 +41,19 @@ export function sessionStatus(vaultRoot: string, session: DiscoveredSession): Se
         anyState = true;
         copied += state.copiedBytes;
       }
-      const plan = planPart(part.path, part.rel, state);
-      if (plan.action === 'append' || plan.action === 'new-generation') {
-        pending += plan.pending;
-      }
-      if (plan.action !== 'missing') {
+      // Atajo barato: si el tamaño no ha cambiado desde lo copiado, no hace falta leer las
+      // puntas del fichero. Refrescar el árbol con cientos de partes tiene que costar `stat`,
+      // no 128 KB de lectura por parte.
+      if (state && part.size === state.copiedBytes) {
         allMissing = false;
+      } else {
+        const plan = planPart(part.path, part.rel, state);
+        if (plan.action === 'append' || plan.action === 'new-generation') {
+          pending += plan.pending;
+        }
+        if (plan.action !== 'missing') {
+          allMissing = false;
+        }
       }
     } else {
       allMissing = false;

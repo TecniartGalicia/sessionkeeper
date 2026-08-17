@@ -134,16 +134,25 @@ export function restoreSession(
         `${Date.now()}-${path.basename(plan.target)}`,
       );
       writeAtomic(backedUpTo, fs.readFileSync(plan.target));
-      fs.rmSync(plan.target);
     }
 
+    // Temporal + rename: nunca hay un instante en el que el destino esté borrado o a medias.
+    // Y si otro proceso tiene el fichero abierto, en Windows el rename falla — que es justo lo
+    // que queremos: mejor un error que destruir el trabajo de una sesión viva.
     fs.mkdirSync(path.dirname(plan.target), { recursive: true });
-    const fd = fs.openSync(plan.target, 'wx');
+    const tmp = `${plan.target}.sk-restore-${process.pid}`;
+    const fd = fs.openSync(tmp, 'wx');
     try {
       fs.writeFileSync(fd, data);
       fs.fsyncSync(fd);
     } finally {
       fs.closeSync(fd);
+    }
+    try {
+      fs.renameSync(tmp, plan.target);
+    } catch (err) {
+      fs.rmSync(tmp, { force: true });
+      throw err;
     }
 
     results.push({ rel: plan.rel, target: plan.target, bytes: data.length, backedUpTo });

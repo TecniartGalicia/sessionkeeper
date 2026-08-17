@@ -5,6 +5,7 @@ import { backupSession, rebuildPart } from '../core/backup';
 import { discoverClaude, discoverCodex, type DiscoveredSession } from '../core/discover';
 import { readRetention, runDoctor, type Finding } from '../core/doctor';
 import { toMarkdown, type ExportResult } from '../core/exporter';
+import { acquireLock } from '../core/lock';
 import { defaultVaultRoot, type Env } from '../core/paths';
 import { restoreSession, isSessionLive, writeRestoreDocs, type RestoreOptions, type RestoreResult } from '../core/restore';
 import { scanText, type SecretHit } from '../core/secrets';
@@ -70,31 +71,39 @@ export class Keeper {
     writeRestoreDocs(root);
     this.writeRestoreScript(root);
 
+    // Dos ventanas de VS Code copiando al mismo almacén se pisarían el estado.
+    const lock = acquireLock(root, os.hostname());
+
     let bytes = 0;
     let waiting = 0;
     const rotated: string[] = [];
     const secrets = new Map<string, SecretHit>();
     let done = 0;
 
-    for (const session of sessions) {
-      if (onProgress && !onProgress(done, sessions.length, session.sessionId)) {
-        break;
-      }
-      const result = backupSession(root, session);
-      bytes += result.bytesCopied;
-      for (const part of result.parts) {
-        if (part.action === 'new-generation') {
-          rotated.push(`${session.sessionId} · ${part.rel}: ${part.reason ?? 'cambió el origen'}`);
+    try {
+      for (const session of sessions) {
+        if (onProgress && !onProgress(done, sessions.length, session.sessionId)) {
+          break;
         }
-        if (part.action === 'wait') {
-          waiting++;
+        const result = backupSession(root, session);
+        bytes += result.bytesCopied;
+        for (const part of result.parts) {
+          if (part.action === 'new-generation') {
+            rotated.push(`${session.sessionId} · ${part.rel}: ${part.reason ?? 'cambió el origen'}`);
+          }
+          if (part.action === 'wait') {
+            waiting++;
+          }
         }
+        for (const hit of this.scanNewBytes(session)) {
+          const prev = secrets.get(hit.id);
+          secrets.set(hit.id, { ...hit, count: (prev?.count ?? 0) + hit.count });
+        }
+        done++;
+        lock.heartbeat();
       }
-      for (const hit of this.scanNewBytes(session)) {
-        const prev = secrets.get(hit.id);
-        secrets.set(hit.id, { ...hit, count: (prev?.count ?? 0) + hit.count });
-      }
-      done++;
+    } finally {
+      lock.release();
     }
 
     return { sessions: done, bytesCopied: bytes, rotated, waiting, secrets: [...secrets.values()] };
