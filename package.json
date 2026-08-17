@@ -2,7 +2,7 @@
   "name": "sessionkeeper",
   "displayName": "SessionKeeper",
   "description": "Back up and rescue your AI coding sessions, locally. Keeps a versioned copy of every session — transcript, subagents and tool outputs — so nothing is gone when retention, an update or a crash wipes it. Works with Claude Code. Local-first, no telemetry. Not affiliated with Anthropic or OpenAI.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "argalla",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -158,6 +158,26 @@
         "command": "sessionkeeper.showLog",
         "title": "%cmd.showLog%",
         "category": "SessionKeeper"
+      },
+      {
+        "command": "sessionkeeper.pro.activate",
+        "title": "%cmd.pro.activate%",
+        "category": "SessionKeeper Pro"
+      },
+      {
+        "command": "sessionkeeper.pro.deactivate",
+        "title": "%cmd.pro.deactivate%",
+        "category": "SessionKeeper Pro"
+      },
+      {
+        "command": "sessionkeeper.pro.status",
+        "title": "%cmd.pro.status%",
+        "category": "SessionKeeper Pro"
+      },
+      {
+        "command": "sessionkeeper.pro.buy",
+        "title": "%cmd.pro.buy%",
+        "category": "SessionKeeper Pro"
       }
     ],
     "menus": {
@@ -196,6 +216,11 @@
           "command": "sessionkeeper.showStorage",
           "when": "view == sessionkeeper.sessions",
           "group": "1_info@2"
+        },
+        {
+          "command": "sessionkeeper.pro.status",
+          "when": "view == sessionkeeper.sessions",
+          "group": "2_pro@1"
         }
       ],
       "view/item/context": [
@@ -246,6 +271,12 @@
           "default": false,
           "scope": "machine",
           "markdownDescription": "%cfg.includeCodex%"
+        },
+        "sessionkeeper.autoBackup": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "markdownDescription": "%cfg.autoBackup%"
         }
       }
     }
@@ -253,5 +284,6 @@
   "allowScripts": {
     "@vscode/vsce-sign@2.0.9": true,
     "esbuild@0.28.2": true
-  }
+  },
+  "pricing": "Trial"
 }

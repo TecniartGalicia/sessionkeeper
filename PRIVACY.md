@@ -20,7 +20,13 @@ Nothing else. Ever.
 
 ## Network
 
-None. SessionKeeper makes no HTTP requests of any kind. It does not check for updates, does not report errors, does not count users.
+**Without a Pro licence: none at all.** SessionKeeper makes no HTTP request of any kind. It does not check for updates, does not report errors, does not count users. On a machine with no licence it does not even read its own secret storage.
+
+**With a Pro licence**, one endpoint is contacted, and only that one: `api.polar.sh/v1/customer-portal/license-keys` (activate / validate / deactivate). What is sent: your licence key, this computer's host name (as the activation label), your platform and the extension version. Nothing else — no session content, no paths, no settings.
+
+When: once when you enter the key, once every 24 hours to revalidate, and when you ask for the licence status. If the network is down, Pro keeps working for 14 days on the last positive validation. Removing the licence sends one deactivation call so the activation slot is freed.
+
+Polar (Polar Software Inc.) is the merchant of record for the purchase: they receive your e-mail and billing details, not us. See [polar.sh/legal/privacy](https://polar.sh/legal/privacy).
 
 ## Credentials in your transcripts
 
@@ -36,7 +42,7 @@ Consequences for you: the vault inherits the permissions of the folder you pick.
 
 ## Data controller
 
-There is no processing of personal data by us because there is no service: no data ever reaches Tecniart Galicia / Argalla. If a paid tier is added in the future, licence validation would be the only network call, and this document will say so before that ships.
+We process no personal data: nothing ever reaches Tecniart Galicia / Argalla. Licence validation goes to Polar, which acts as merchant of record and controller for the purchase data.
 
 ## Questions
 

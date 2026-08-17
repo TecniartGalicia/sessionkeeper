@@ -26,6 +26,19 @@ No es un visor de historial. Enseña lo justo para encontrar y rescatar una sesi
 
 Tampoco promete que una sesión restaurada se pueda reanudar. Restaurar te devuelve los bytes; que la herramienta los reabra es cosa suya.
 
+## Pro
+
+Todo lo anterior es gratis, para siempre. **Pro añade dos cosas**, por **12 € de pago único** (7 € con el código `LANZAMIENTO` hasta el 14 de septiembre de 2026):
+
+- **Vigilancia continua** — las sesiones se copian a medida que cambian, sin pulsar nada.
+- **Codex como segundo origen** — `~/.codex/sessions` junto a Claude Code.
+
+`SessionKeeper Pro: conseguir una licencia` abre el pago ([Polar](https://polar.sh) es el merchant of record: factura y liquida el IVA). Una clave activa **tres** equipos, y puedes liberar una activación desde tu portal de cliente de Polar.
+
+**Pro solo añade.** Copiar a mano, restaurar, exportar y el diagnóstico siguen siendo gratis sin ninguna licencia, así que una clave que caduque solo apaga la vigilancia: nunca te quedas fuera de tus propias copias.
+
+**Nuestro compromiso**: si dejamos de desarrollar SessionKeeper, el Pro se libera gratis. El almacén es formato abierto y `restore.mjs` funciona sin nosotros de todas formas.
+
 ## Requisitos
 
 - VS Code 1.95 o posterior.

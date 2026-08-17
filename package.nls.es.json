@@ -12,5 +12,10 @@
   "cmd.showLog": "Ver el registro",
   "cfg.vaultPath": "Carpeta donde se guardan las copias. Vacío = la carpeta por defecto de tu sistema. Elige una que ya respaldes (disco externo, NAS). Si eliges una carpeta sincronizada con la nube, ten en cuenta que las transcripciones pueden contener credenciales.",
   "cfg.claudeHome": "Carpeta de configuración de Claude Code (por defecto `CLAUDE_CONFIG_DIR`, o `~/.claude`).",
-  "cfg.includeCodex": "Listar y copiar también las sesiones de Codex (`~/.codex/sessions`). Experimental."
+  "cfg.includeCodex": "Listar y copiar también las sesiones de Codex (`~/.codex/sessions`) (**Pro**). Experimental.",
+  "cmd.pro.activate": "Pro: introducir clave de licencia",
+  "cmd.pro.deactivate": "Pro: quitar la licencia de este equipo",
+  "cmd.pro.status": "Pro: estado de la licencia",
+  "cmd.pro.buy": "Pro: conseguir una licencia",
+  "cfg.autoBackup": "Mantener las sesiones copiadas de forma continua, sin pulsar nada (**Pro**). Copiar a mano es gratis siempre."
 }

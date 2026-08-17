@@ -20,7 +20,13 @@ Nada más. Nunca.
 
 ## Red
 
-Ninguna. SessionKeeper no hace ninguna petición HTTP. No busca actualizaciones, no reporta errores, no cuenta usuarios.
+**Sin licencia Pro: ninguna en absoluto.** SessionKeeper no hace ninguna petición HTTP. No busca actualizaciones, no reporta errores, no cuenta usuarios. En un equipo sin licencia no llega ni a leer su propio almacén de secretos.
+
+**Con licencia Pro** se contacta con un único endpoint, y solo con ese: `api.polar.sh/v1/customer-portal/license-keys` (activar / validar / desactivar). Lo que se envía: tu clave de licencia, el nombre de este equipo (como etiqueta de la activación), tu plataforma y la versión de la extensión. Nada más: ni contenido de sesiones, ni rutas, ni ajustes.
+
+Cuándo: una vez al introducir la clave, una vez cada 24 horas para revalidar, y cuando pides el estado de la licencia. Si no hay red, Pro sigue funcionando 14 días con la última validación positiva. Al quitar la licencia se envía una desactivación para liberar la activación.
+
+Polar (Polar Software Inc.) es el merchant of record de la compra: tus datos de correo y facturación los recibe Polar, no nosotros. Ver [polar.sh/legal/privacy](https://polar.sh/legal/privacy).
 
 ## Credenciales en tus transcripciones
 
@@ -36,7 +42,7 @@ Lo que implica para ti: el almacén hereda los permisos de la carpeta que elijas
 
 ## Responsable del tratamiento
 
-No hay tratamiento de datos personales por nuestra parte porque no hay servicio: ningún dato llega a Tecniart Galicia / Argalla. Si en el futuro se añade una versión de pago, la validación de licencia sería la única llamada de red, y este documento lo dirá antes de que eso se publique.
+No hay tratamiento de datos personales por nuestra parte: ningún dato llega a Tecniart Galicia / Argalla. La validación de licencia va contra Polar, que actúa como merchant of record y responsable de los datos de compra.
 
 ## Dudas
 

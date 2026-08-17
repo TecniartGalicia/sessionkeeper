@@ -12,5 +12,10 @@
   "cmd.showLog": "Show log",
   "cfg.vaultPath": "Folder where backups are stored. Leave empty to use the default location for your system. Pick a folder you already back up (external drive, NAS). If you pick a cloud-synced folder, remember transcripts can contain credentials.",
   "cfg.claudeHome": "Override the Claude Code configuration folder (defaults to `CLAUDE_CONFIG_DIR`, or `~/.claude`).",
-  "cfg.includeCodex": "Also list and back up Codex sessions (`~/.codex/sessions`). Experimental."
+  "cfg.includeCodex": "Also list and back up Codex sessions (`~/.codex/sessions`) (**Pro**). Experimental.",
+  "cmd.pro.activate": "Pro: enter licence key",
+  "cmd.pro.deactivate": "Pro: remove licence from this machine",
+  "cmd.pro.status": "Pro: licence status",
+  "cmd.pro.buy": "Pro: get a licence",
+  "cfg.autoBackup": "Keep sessions backed up continuously, without pressing anything (**Pro**). Backing up by hand is always free."
 }

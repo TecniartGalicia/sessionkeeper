@@ -17,3 +17,14 @@ export function currentEnv(): Env {
     vars,
   };
 }
+
+let channel: { appendLine(line: string): void } | undefined;
+
+/** El canal de salida se inyecta al activar, para que `core/` y `pro/` no dependan de la UI. */
+export function setLogChannel(target: { appendLine(line: string): void }): void {
+  channel = target;
+}
+
+export function log(line: string): void {
+  channel?.appendLine(`${new Date().toISOString()} ${line}`);
+}

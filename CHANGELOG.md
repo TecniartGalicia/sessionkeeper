@@ -2,6 +2,21 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.2.0] — 2026-08-17
+
+### Añadido
+- **SessionKeeper Pro** (12 € de pago único; 7 € con el código `LANZAMIENTO` hasta el 2026-09-14):
+  vigilancia continua —las sesiones se copian a medida que cambian, sin pulsar nada— y Codex
+  como segundo origen. Licencias vía Polar, con validación offline-first: caché de 60 s,
+  revalidación cada 24 h y 14 días de gracia sin red.
+- Comandos `Pro: introducir clave`, `Pro: estado de la licencia`, `Pro: quitar la licencia de
+  este equipo` y `Pro: conseguir una licencia`.
+
+### Notas
+- **Pro solo añade.** Copiar a mano, restaurar, exportar y el diagnóstico siguen siendo gratis
+  sin licencia; si una clave deja de valer, lo único que se apaga es la vigilancia.
+- Compromiso publicado en el README: si el desarrollo se congela, el Pro se libera.
+
 ## [0.1.0] — 2026-08-17
 
 Primera versión pública.

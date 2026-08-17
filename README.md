@@ -26,6 +26,19 @@ It is not a history viewer. It shows enough to find and rescue a session — no 
 
 It does not promise that a restored session will resume. Restoring gives you the bytes back; whether the tool reopens them is the tool's call.
 
+## Pro
+
+Everything above is free, for good. **Pro adds two things**, for a **one-time 12 €** (7 € with the code `LANZAMIENTO` until 14 September 2026):
+
+- **Continuous watching** — sessions get backed up as they change, without pressing anything.
+- **Codex as a second source** — `~/.codex/sessions` alongside Claude Code.
+
+`SessionKeeper Pro: get a licence` opens the checkout ([Polar](https://polar.sh) is the merchant of record: it invoices you and handles VAT). One key activates **three** computers, and you can free a slot from your Polar customer portal.
+
+**Pro only ever adds.** Backing up by hand, restoring, exporting and the Doctor stay free with no licence at all, so a key that expires only turns the watching off — you are never locked out of your own copies.
+
+**Our commitment**: if we stop developing SessionKeeper, Pro is released for free. The vault is an open format and `restore.mjs` works without us either way.
+
 ## Requirements
 
 - VS Code 1.95 or newer.

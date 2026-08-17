@@ -57,6 +57,14 @@ export interface BackupOutcome {
 export class Keeper {
   constructor(private readonly config: KeeperConfig) {}
 
+  get env(): Env {
+    return this.config.env;
+  }
+
+  get claudeHomeOverride(): string | undefined {
+    return this.config.claudeHome;
+  }
+
   get vaultRoot(): string {
     const base = this.config.vaultPath?.trim() || defaultVaultRoot(this.config.env);
     return path.join(base, hostId(os.hostname()));

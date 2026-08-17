@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { l10n } from 'vscode';
-import { currentEnv } from './vscode/env';
+import { currentEnv, setLogChannel } from './vscode/env';
 import {
   claudeDesktopSessionsDir,
   claudeHome,
@@ -10,6 +10,8 @@ import {
 import { formatBytes } from './core/status';
 import { Keeper } from './service/keeper';
 import { SessionsProvider, type Node } from './view/sessionsView';
+import { ProFeatures } from './pro/features';
+import { isPro } from './pro/licenseService';
 
 let output: vscode.OutputChannel | undefined;
 
@@ -17,13 +19,18 @@ function log(message: string): void {
   output?.appendLine(`${new Date().toISOString()} ${message}`);
 }
 
+let proFeatures: ProFeatures | undefined;
+let codexAllowed = false;
+
 function keeper(): Keeper {
   const config = vscode.workspace.getConfiguration('sessionkeeper');
   return new Keeper({
     env: currentEnv(),
     vaultPath: config.get<string>('vaultPath')?.trim() || undefined,
     claudeHome: config.get<string>('claudeHome')?.trim() || undefined,
-    includeCodex: config.get<boolean>('includeCodex') ?? false,
+    // Codex es el segundo origen y forma parte de Pro; sin licencia se ignora el ajuste,
+    // pero no se toca (si la licencia vuelve, vuelve solo).
+    includeCodex: (config.get<boolean>('includeCodex') ?? false) && codexAllowed,
   });
 }
 
@@ -41,6 +48,7 @@ function wrap(name: string, fn: (...args: never[]) => Promise<void> | void) {
 
 export function activate(context: vscode.ExtensionContext): void {
   output = vscode.window.createOutputChannel('SessionKeeper');
+  setLogChannel(output);
   context.subscriptions.push(output);
 
   const provider = new SessionsProvider(keeper);
@@ -56,6 +64,18 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('sessionkeeper.showStorage', wrap('showStorage', () => showStorage())),
     vscode.commands.registerCommand('sessionkeeper.showLog', () => output?.show(true)),
   );
+
+  proFeatures = new ProFeatures(context, keeper, () => provider.refresh());
+  context.subscriptions.push(proFeatures, ...proFeatures.register());
+
+  void isPro(context).then((pro) => {
+    codexAllowed = pro;
+    const wantsCodex = vscode.workspace.getConfiguration('sessionkeeper').get<boolean>('includeCodex', false);
+    if (wantsCodex && !pro) {
+      void ProFeatures.upsell(l10n.t('Backing up Codex sessions'));
+    }
+    provider.refresh();
+  });
 
   provider.refresh();
   warnAboutRemote();
@@ -243,5 +263,7 @@ async function showStorage(): Promise<void> {
 }
 
 export function deactivate(): void {
+  proFeatures?.dispose();
+  proFeatures = undefined;
   output = undefined;
 }
