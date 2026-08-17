@@ -21,6 +21,11 @@ import {
 
 export type PlanAction = 'skip' | 'append' | 'new-generation' | 'missing' | 'wait';
 
+/** Tamaño de bloque de trabajo: acota la memoria y da granularidad ante cortes. */
+export const CHUNK_BYTES = 8 * 1024 * 1024;
+/** Tope para una sola línea sin salto: más allá se copia en crudo en vez de crecer sin fin. */
+export const MAX_LINE_BYTES = 64 * 1024 * 1024;
+
 export interface PartPlan {
   readonly action: PlanAction;
   readonly rel: string;
@@ -113,12 +118,58 @@ export function backupPart(
     generation = 1;
   }
 
-  const from = state?.copiedBytes ?? 0;
   const size = fs.statSync(part.path).size;
-  const block = readRange(part.path, from, size - from);
-  const usable = part.rel.endsWith('.jsonl') ? safeCutOffset(block) : block.length;
+  const isJsonl = part.rel.endsWith('.jsonl');
+  let from = state?.copiedBytes ?? 0;
+  let chunks = [...(state?.chunks ?? [])];
+  let copied = 0;
 
-  if (usable === 0) {
+  // Se avanza por bloques y se persiste el estado tras cada uno: así la primera copia de un
+  // fichero de 324 MB no se lee de golpe (el criterio de memoria es 300 MB de RSS para TODO
+  // el proceso) y un corte a mitad de barrido deja una copia coherente hasta el último bloque.
+  while (from < size) {
+    let want = Math.min(CHUNK_BYTES, size - from);
+    let block = readRange(part.path, from, want);
+    let usable = isJsonl ? safeCutOffset(block) : block.length;
+
+    // Una línea más larga que el bloque: se amplía la ventana hasta encontrar su final.
+    while (isJsonl && usable === 0 && want < MAX_LINE_BYTES && from + want < size) {
+      want = Math.min(want * 2, MAX_LINE_BYTES, size - from);
+      block = readRange(part.path, from, want);
+      usable = safeCutOffset(block);
+    }
+    if (usable === 0) {
+      if (isJsonl && from + want >= size) {
+        break; // la cola es una línea a medias: se recoge en el ciclo siguiente
+      }
+      usable = block.length; // línea gigantesca sin frontera: se copia tal cual
+    }
+
+    const payload = block.subarray(0, usable);
+    const n = chunks.length + 1;
+    writeAtomic(chunkPath(base, generation, n), gzipSync(payload, { level: GZIP_LEVEL }));
+
+    const to = from + usable;
+    chunks = [...chunks, { n, from, to, sha256: sha256(payload) }];
+    const probes = probesOfSource(part.path, to);
+    const next: PartState = {
+      formatVersion: VAULT_FORMAT,
+      rel: part.rel,
+      generation,
+      copiedBytes: to,
+      headHash: probes.head,
+      tailHash: probes.tail,
+      chunks,
+      updatedAt: new Date().toISOString(),
+      closed: false,
+    };
+    writeAtomic(statePath(base, generation), JSON.stringify(next, null, 2));
+
+    copied += usable;
+    from = to;
+  }
+
+  if (copied === 0) {
     return {
       rel: part.rel,
       action: 'wait',
@@ -128,28 +179,9 @@ export function backupPart(
     };
   }
 
-  const payload = block.subarray(0, usable);
-  const n = (state?.chunks.length ?? 0) + 1;
-  writeAtomic(chunkPath(base, generation, n), gzipSync(payload, { level: GZIP_LEVEL }));
-
-  const copiedBytes = from + usable;
-  const probes = probesOfSource(part.path, copiedBytes);
-  const next: PartState = {
-    formatVersion: VAULT_FORMAT,
-    rel: part.rel,
-    generation,
-    copiedBytes,
-    headHash: probes.head,
-    tailHash: probes.tail,
-    chunks: [...(state?.chunks ?? []), { n, from, to: copiedBytes, sha256: sha256(payload) }],
-    updatedAt: new Date().toISOString(),
-    closed: false,
-  };
-  writeAtomic(statePath(base, generation), JSON.stringify(next, null, 2));
-
   // El motivo viaja con el resultado: es lo que el informe le enseña al usuario cuando
   // una sesión rota de generación ("la cabecera ha cambiado", "el fichero ha encogido").
-  return { rel: part.rel, action: plan.action, bytesCopied: usable, generation, reason: plan.reason };
+  return { rel: part.rel, action: plan.action, bytesCopied: copied, generation, reason: plan.reason };
 }
 
 export interface SessionResult {

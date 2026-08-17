@@ -240,3 +240,35 @@ describe('core/restore', () => {
     assert.strictEqual(isSessionLive(box.env, SESSION).live, true);
   });
 });
+
+describe('core/backup — ficheros grandes', () => {
+  let box: Sandbox;
+  beforeEach(() => {
+    box = makeSandbox('grande');
+  });
+  afterEach(() => box.dispose());
+
+  it('trocea un fichero mayor que el bloque de trabajo y lo restaura entero', function () {
+    this.timeout(60000);
+    writeSession(box, SLUG, SESSION, { messages: 1 });
+    const transcript = path.join(box.claudeHome, 'projects', SLUG, `${SESSION}.jsonl`);
+
+    // ~9 MB: por encima de CHUNK_BYTES (8 MB), así que tiene que salir más de un trozo.
+    const filler = 'x'.repeat(900);
+    const lines: string[] = [];
+    for (let i = 0; i < 10000; i++) {
+      lines.push(JSON.stringify({ type: i % 2 ? 'assistant' : 'user', i, filler }));
+    }
+    fs.writeFileSync(transcript, lines.join('\n') + '\n');
+    const size = fs.statSync(transcript).size;
+    assert.ok(size > 8 * 1024 * 1024, `el fixture debería pasar de 8 MB, mide ${size}`);
+
+    const session = only(box);
+    const result = backupSession(box.vault, session);
+    assert.strictEqual(result.bytesCopied, size, 'se copia el fichero entero');
+
+    const rebuilt = rebuildPart(box.vault, session, 'main.jsonl');
+    assert.strictEqual(rebuilt.length, size);
+    assert.deepStrictEqual(rebuilt, fs.readFileSync(transcript));
+  });
+});
