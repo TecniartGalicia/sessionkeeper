@@ -2,6 +2,12 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.2.1] — 2026-08-17
+
+### Cambiado
+- Capturas reales en la ficha: el árbol con los estados de copia (incluida una sesión que ya
+  solo existe en el almacén) y el informe del diagnóstico.
+
 ## [0.2.0] — 2026-08-17
 
 ### Añadido
