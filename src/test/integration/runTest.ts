@@ -77,7 +77,15 @@ async function main(): Promise<void> {
       extensionTestsEnv: { SK_IT_CLAUDE_HOME: claudeHome, SK_IT_VAULT: vault, SK_IT_TMP: tmp },
     });
   } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
+    // Borrado best-effort: en Windows VS Code puede mantener handles abiertos un
+    // instante tras cerrarse (EBUSY al hacer rmdir). Reintentamos y, si aún falla,
+    // NO tumbamos el job por un fallo de limpieza (los tests ya corrieron; el runner
+    // recicla su propio temp de todos modos).
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+    } catch (e) {
+      console.warn('cleanup del temp no completado (se ignora):', (e as Error).message);
+    }
   }
 }
 

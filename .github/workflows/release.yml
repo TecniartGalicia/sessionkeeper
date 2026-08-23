@@ -53,7 +53,18 @@ jobs:
           if npx vsce show argalla.sessionkeeper --json 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{let j={};try{j=JSON.parse(d)||{}}catch{}process.exit((j.versions||[]).some(v=>v.version==='$VER')?0:1)})"; then
             echo "Marketplace already has $VER — skipping"
           else
-            npx vsce publish --no-dependencies --packagePath "sessionkeeper-${GITHUB_REF_NAME}.vsix"
+            # Reintentos con backoff: el Marketplace corre sobre Azure DevOps y devuelve
+            # TF10216 ("services are currently unavailable") de forma transitoria — un
+            # publish único falla el release sin motivo real.
+            attempt=1; max=4
+            while :; do
+              out="$(npx vsce publish --no-dependencies --packagePath "sessionkeeper-${GITHUB_REF_NAME}.vsix" 2>&1)"; code=$?
+              echo "$out"
+              if [ $code -eq 0 ] || echo "$out" | grep -qiE "already exists|already published"; then break; fi
+              if [ $attempt -ge $max ]; then echo "vsce publish falló tras $max intentos"; exit $code; fi
+              wait_s=$((attempt*20)); echo "Fallo transitorio (p. ej. TF10216); reintento $attempt/$max en ${wait_s}s…"; sleep $wait_s
+              attempt=$((attempt+1))
+            done
           fi
       - name: Publish to Open VSX (skips if this version is already there)
         env:
@@ -63,7 +74,17 @@ jobs:
           if npx ovsx get argalla.sessionkeeper -v "$VER" --metadata >/dev/null 2>&1; then
             echo "Open VSX already has $VER — skipping"
           else
-            npx ovsx publish "sessionkeeper-${GITHUB_REF_NAME}.vsix" -p "$OVSX_PAT"
+            # Mismo patrón de reintentos ante fallos transitorios del servicio.
+            # (ovsx lee OVSX_PAT del entorno; no se pasa por argv.)
+            attempt=1; max=4
+            while :; do
+              out="$(npx ovsx publish "sessionkeeper-${GITHUB_REF_NAME}.vsix" 2>&1)"; code=$?
+              echo "$out"
+              if [ $code -eq 0 ] || echo "$out" | grep -qiE "already published|already exists"; then break; fi
+              if [ $attempt -ge $max ]; then echo "ovsx publish falló tras $max intentos"; exit $code; fi
+              wait_s=$((attempt*20)); echo "Fallo transitorio; reintento $attempt/$max en ${wait_s}s…"; sleep $wait_s
+              attempt=$((attempt+1))
+            done
           fi
       - name: GitHub release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
